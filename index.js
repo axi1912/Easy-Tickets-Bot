@@ -322,9 +322,8 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    // Mencionar todos los roles de staff
-    const staffMentions = staffRoleIds.map(roleId => `<@&${roleId}>`).join(' ');
-    await canal.send({ content: staffMentions || '@here', embeds: [embedDatos] });
+    // Mencionar rol específico de reclutamiento
+    await canal.send({ content: `<@&1382022718899355688>`, embeds: [embedDatos] });
     await canal.send({ embeds: [embedPruebas], components: [botones] });
 
     // Log de apertura
@@ -593,9 +592,8 @@ client.on('interactionCreate', async interaction => {
     );
 
     // Mencionar todos los roles de staff
-    const staffRoles = getStaffRoles();
-    const staffMentions = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
-    await canal.send({ content: staffMentions || '@here', embeds: [embedTicket], components: [botonesTicket] });
+    // Mencionar rol específico de soporte
+    await canal.send({ content: `<@&1241211764100698203>`, embeds: [embedTicket], components: [botonesTicket] });
 
     // Log de apertura
     try {
