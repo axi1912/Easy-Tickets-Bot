@@ -16,6 +16,13 @@ const ECONOMY_FILE = './economy.json';
 // Almacenar juegos activos en memoria
 const activeGames = new Map();
 
+// Función para obtener los roles de staff (soporta múltiples roles separados por comas)
+function getStaffRoles() {
+  const staffRoles = process.env.ROL_STAFF;
+  if (!staffRoles) return [];
+  return staffRoles.split(',').map(id => id.trim());
+}
+
 // Cargar/guardar tickets
 function loadTickets() {
   if (!fs.existsSync(TICKETS_FILE)) return {};
@@ -233,16 +240,23 @@ client.on('interactionCreate', async interaction => {
     const disponibilidad = interaction.fields.getTextInputValue('disponibilidad');
     const presentacion = interaction.fields.getTextInputValue('presentacion');
 
+    // Crear permisos para múltiples roles de staff
+    const staffRoleIds = getStaffRoles();
+    const permissionOverwrites = [
+      { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] },
+      ...staffRoleIds.map(roleId => ({
+        id: roleId,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory]
+      }))
+    ];
+
     // Crear canal
     const canal = await interaction.guild.channels.create({
       name: `reclutamiento-${interaction.user.username}`,
       type: 0,
       parent: process.env.CATEGORIA_RECLUTAMIENTO,
-      permissionOverwrites: [
-        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] },
-        { id: process.env.ROL_STAFF, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] }
-      ]
+      permissionOverwrites
     });
 
     // Guardar ticket
@@ -528,16 +542,23 @@ client.on('interactionCreate', async interaction => {
 
     const tipo = tipos[interaction.customId];
 
+    // Crear permisos para múltiples roles de staff
+    const staffRoleIds = getStaffRoles();
+    const permissionOverwrites = [
+      { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] },
+      ...staffRoleIds.map(roleId => ({
+        id: roleId,
+        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory]
+      }))
+    ];
+
     // Crear canal
     const canal = await interaction.guild.channels.create({
       name: `${tipo.emoji}-${interaction.user.username}`,
       type: 0,
       parent: '1431157269453869086',
-      permissionOverwrites: [
-        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] },
-        { id: process.env.ROL_STAFF, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory] }
-      ]
+      permissionOverwrites
     });
 
     // Guardar ticket
@@ -570,7 +591,10 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await canal.send({ content: `<@&${process.env.ROL_STAFF}>`, embeds: [embedTicket], components: [botonesTicket] });
+    // Mencionar todos los roles de staff
+    const staffRoles = getStaffRoles();
+    const staffMentions = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
+    await canal.send({ content: staffMentions || '@here', embeds: [embedTicket], components: [botonesTicket] });
 
     // Log de apertura
     try {
