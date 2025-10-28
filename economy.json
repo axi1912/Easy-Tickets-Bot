@@ -1,0 +1,28 @@
+{
+  "853700485022613525": {
+    "coins": 900,
+    "lastDaily": 1761630029345,
+    "inventory": [],
+    "titles": [],
+    "stats": {
+      "gamesPlayed": 17,
+      "gamesWon": 6,
+      "gamesLost": 11,
+      "totalWinnings": 700,
+      "totalLosses": 1700
+    }
+  },
+  "571107970260402216": {
+    "coins": 2000500,
+    "lastDaily": 1761630069151,
+    "inventory": [],
+    "titles": [],
+    "stats": {
+      "gamesPlayed": 15,
+      "gamesWon": 7,
+      "gamesLost": 7,
+      "totalWinnings": 1009200,
+      "totalLosses": 21000
+    }
+  }
+}

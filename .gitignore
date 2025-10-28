@@ -1,0 +1,21 @@
+# Dependencias
+node_modules/
+
+# Archivos de entorno
+.env
+
+# Archivos de base de datos (opcional - decide si quieres subirlos)
+# tickets.json
+# economy.json
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Archivos temporales
+*.tmp
+*.temp
