@@ -18,8 +18,7 @@ const activeGames = new Map();
 
 // Función para obtener los roles de staff (soporta múltiples roles separados por comas)
 function getStaffRoles() {
-  const staffRoles = process.env.ROL_STAFF;
-  if (!staffRoles) return [];
+  const staffRoles = process.env.ROL_STAFF || '1241211764100698203'; // Rol por defecto si no está configurado
   return staffRoles.split(',').map(id => id.trim());
 }
 
@@ -323,7 +322,9 @@ client.on('interactionCreate', async interaction => {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await canal.send({ content: `<@&1382022718899355688>`, embeds: [embedDatos] });
+    // Mencionar todos los roles de staff
+    const staffMentions = staffRoleIds.map(roleId => `<@&${roleId}>`).join(' ');
+    await canal.send({ content: staffMentions || '@here', embeds: [embedDatos] });
     await canal.send({ embeds: [embedPruebas], components: [botones] });
 
     // Log de apertura
