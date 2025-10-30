@@ -112,6 +112,14 @@ client.once('ready', async () => {
   // Registrar comandos automáticamente
   try {
     console.log('🔄 Registrando comandos slash...');
+    console.log('CLIENT_ID:', process.env.CLIENT_ID);
+    console.log('GUILD_ID:', process.env.GUILD_ID);
+    
+    if (!process.env.CLIENT_ID || !process.env.GUILD_ID) {
+      console.error('❌ Faltan variables de entorno: CLIENT_ID o GUILD_ID');
+      console.log('Variables disponibles:', Object.keys(process.env).filter(k => k.includes('ID') || k.includes('TOKEN')));
+      return;
+    }
     
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     
