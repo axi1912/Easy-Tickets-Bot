@@ -222,6 +222,82 @@ const commands = [
         min_value: 1
       }
     ]
+  },
+  // Nuevos comandos
+  {
+    name: 'duel',
+    description: '⚔️ Retar a otro usuario a un duelo de monedas',
+    options: [
+      {
+        name: 'oponente',
+        description: 'Usuario al que deseas retar',
+        type: 6, // USER
+        required: true
+      },
+      {
+        name: 'apuesta',
+        description: 'Cantidad de monedas a apostar',
+        type: 4, // INTEGER
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'shop',
+    description: '🛒 Ver la tienda de items especiales'
+  },
+  {
+    name: 'buy',
+    description: '💳 Comprar un item de la tienda',
+    options: [
+      {
+        name: 'item',
+        description: 'ID del item a comprar (lucky_charm, shield, multiplier, daily_boost, vip_title)',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: '🍀 Amuleto de la Suerte (5000)', value: 'lucky_charm' },
+          { name: '🛡️ Escudo Protector (3000)', value: 'shield' },
+          { name: '💎 Multiplicador x2 (10000)', value: 'multiplier' },
+          { name: '⚡ Boost Diario (2000)', value: 'daily_boost' },
+          { name: '👑 Título VIP (15000)', value: 'vip_title' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'inventory',
+    description: '🎒 Ver tu inventario de items',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario del cual ver el inventario',
+        type: 6, // USER
+        required: false
+      }
+    ]
+  },
+  {
+    name: 'respuesta',
+    description: '📝 [STAFF] Enviar una respuesta rápida predefinida',
+    options: [
+      {
+        name: 'template',
+        description: 'Selecciona el template de respuesta',
+        type: 3, // STRING
+        required: true,
+        choices: [
+          { name: '👋 Bienvenida', value: 'bienvenida' },
+          { name: '🔍 En revisión', value: 'en_revision' },
+          { name: '📸 Necesita pruebas', value: 'necesita_pruebas' },
+          { name: '✅ Resuelto', value: 'resuelto' },
+          { name: '❌ Rechazado', value: 'rechazado' },
+          { name: '⏱️ En espera', value: 'espera' },
+          { name: '🔒 Cerrar ticket', value: 'cierre' }
+        ]
+      }
+    ]
   }
 ];
 

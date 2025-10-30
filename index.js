@@ -16,6 +16,42 @@ const ECONOMY_FILE = './economy.json';
 // Almacenar juegos activos en memoria
 const activeGames = new Map();
 
+// Sistema de Backup Automático
+function createBackup() {
+  try {
+    const backupDir = './backups';
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir);
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    
+    // Backup de economía
+    if (fs.existsSync(ECONOMY_FILE)) {
+      const economyBackup = `${backupDir}/economy_${timestamp}.json`;
+      fs.copyFileSync(ECONOMY_FILE, economyBackup);
+    }
+
+    // Backup de tickets
+    if (fs.existsSync(TICKETS_FILE)) {
+      const ticketsBackup = `${backupDir}/tickets_${timestamp}.json`;
+      fs.copyFileSync(TICKETS_FILE, ticketsBackup);
+    }
+
+    // Limpiar backups antiguos (mantener solo los últimos 10 de cada tipo)
+    const files = fs.readdirSync(backupDir);
+    const economyBackups = files.filter(f => f.startsWith('economy_')).sort().reverse();
+    const ticketsBackups = files.filter(f => f.startsWith('tickets_')).sort().reverse();
+
+    economyBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
+    ticketsBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
+
+    console.log(`✅ Backup creado: ${timestamp}`);
+  } catch (error) {
+    console.error('❌ Error creando backup:', error);
+  }
+}
+
 // Función para obtener los roles de staff (soporta múltiples roles separados por comas)
 function getStaffRoles() {
   const staffRoles = process.env.ROL_STAFF || '1241211764100698203'; // Rol por defecto si no está configurado
@@ -72,6 +108,14 @@ function updateUser(userId, data) {
 
 client.once('ready', () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
+  
+  // Crear backup inicial
+  createBackup();
+  
+  // Backup automático cada hora (3600000 ms)
+  setInterval(() => {
+    createBackup();
+  }, 3600000);
 });
 
 // Manejar mensajes para el juego de adivinar el número
@@ -716,12 +760,19 @@ client.on('interactionCreate', async interaction => {
     }
 
     const senderData = getUser(interaction.user.id);
+    
+    // Comisión del 5% en transferencias
+    const commission = Math.floor(amount * 0.05);
+    const totalCost = amount + commission;
 
-    if (senderData.coins < amount) {
-      return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${senderData.coins.toLocaleString()}** 🪙`, flags: 64 });
+    if (senderData.coins < totalCost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas.\n💰 Necesitas: **${totalCost.toLocaleString()}** 🪙 (${amount.toLocaleString()} + ${commission.toLocaleString()} comisión)\n💰 Tienes: **${senderData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
     }
 
-    senderData.coins -= amount;
+    senderData.coins -= totalCost;
     updateUser(interaction.user.id, senderData);
 
     const receiverData = getUser(targetUser.id);
@@ -733,9 +784,13 @@ client.on('interactionCreate', async interaction => {
       .setTitle('💸 Transferencia Exitosa')
       .setDescription(`**${interaction.user.username}** ha enviado **${amount.toLocaleString()}** 🪙 a **${targetUser.username}**`)
       .addFields(
+        { name: '💰 Monto enviado', value: `${amount.toLocaleString()} 🪙`, inline: true },
+        { name: '📊 Comisión (5%)', value: `${commission.toLocaleString()} 🪙`, inline: true },
+        { name: '💵 Total cobrado', value: `${totalCost.toLocaleString()} 🪙`, inline: true },
         { name: 'Tu nuevo balance', value: `${senderData.coins.toLocaleString()} 🪙`, inline: true },
         { name: 'Balance de ' + targetUser.username, value: `${receiverData.coins.toLocaleString()} 🪙`, inline: true }
       )
+      .setFooter({ text: '💡 Tip: Las transferencias tienen una comisión del 5%' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
@@ -1799,6 +1854,343 @@ client.on('interactionCreate', async interaction => {
         await interaction.update({ embeds: [embed], components: [] });
       }
     }
+  }
+  // ========== SISTEMA DE DUELOS ==========
+  if (interaction.isChatInputCommand() && interaction.commandName === 'duel') {
+    const opponent = interaction.options.getUser('oponente');
+    const bet = interaction.options.getInteger('apuesta');
+    const userData = getUser(interaction.user.id);
+
+    if (opponent.id === interaction.user.id) {
+      return interaction.reply({ content: '❌ No puedes retarte a ti mismo.', flags: 64 });
+    }
+
+    if (opponent.bot) {
+      return interaction.reply({ content: '❌ No puedes retar a un bot.', flags: 64 });
+    }
+
+    if (bet <= 0) {
+      return interaction.reply({ content: '❌ La apuesta debe ser mayor a 0.', flags: 64 });
+    }
+
+    if (userData.coins < bet) {
+      return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, flags: 64 });
+    }
+
+    const opponentData = getUser(opponent.id);
+    if (opponentData.coins < bet) {
+      return interaction.reply({ content: `❌ ${opponent.username} no tiene suficientes monedas para este duelo.`, flags: 64 });
+    }
+
+    // Verificar si ya hay un duelo pendiente con este usuario
+    for (const game of activeGames.values()) {
+      if (game.game === 'duel' && (game.challenger === interaction.user.id || game.opponent === opponent.id)) {
+        return interaction.reply({ content: '❌ Ya hay un duelo pendiente con este usuario.', flags: 64 });
+      }
+    }
+
+    const duelId = `duel_${interaction.user.id}_${Date.now()}`;
+    activeGames.set(duelId, {
+      game: 'duel',
+      challenger: interaction.user.id,
+      opponent: opponent.id,
+      bet,
+      timestamp: Date.now()
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setTitle('⚔️ Duelo de Monedas')
+      .setDescription(`**${interaction.user}** ha retado a **${opponent}** a un duelo!`)
+      .addFields(
+        { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true },
+        { name: '🎯 Modalidad', value: 'Cara o Cruz', inline: true },
+        { name: '⏱️ Tiempo límite', value: '60 segundos', inline: true }
+      )
+      .setFooter({ text: 'El retado debe aceptar para comenzar' });
+
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`duel_accept_${duelId}`)
+        .setLabel('⚔️ Aceptar Duelo')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`duel_decline_${duelId}`)
+        .setLabel('❌ Rechazar')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await interaction.reply({ content: `${opponent}`, embeds: [embed], components: [buttons] });
+
+    // Auto-cancelar después de 60 segundos
+    setTimeout(() => {
+      if (activeGames.has(duelId)) {
+        activeGames.delete(duelId);
+      }
+    }, 60000);
+  }
+
+  // Botones de duelo
+  if (interaction.isButton() && interaction.customId.startsWith('duel_')) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1]; // 'accept' o 'decline'
+    const duelId = parts.slice(2).join('_');
+    
+    const duel = activeGames.get(duelId);
+    if (!duel) {
+      return interaction.reply({ content: '❌ Este duelo ya expiró o fue cancelado.', flags: 64 });
+    }
+
+    if (interaction.user.id !== duel.opponent) {
+      return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
+    }
+
+    if (action === 'decline') {
+      activeGames.delete(duelId);
+      await interaction.update({ 
+        content: '❌ Duelo rechazado', 
+        embeds: [], 
+        components: [] 
+      });
+      return;
+    }
+
+    if (action === 'accept') {
+      // Realizar el duelo
+      const challenger = await client.users.fetch(duel.challenger);
+      const opponent = await client.users.fetch(duel.opponent);
+      
+      const challengerData = getUser(duel.challenger);
+      const opponentData = getUser(duel.opponent);
+
+      // Verificar que ambos aún tengan monedas
+      if (challengerData.coins < duel.bet) {
+        activeGames.delete(duelId);
+        return interaction.update({ 
+          content: `❌ ${challenger.username} ya no tiene suficientes monedas.`, 
+          embeds: [], 
+          components: [] 
+        });
+      }
+
+      if (opponentData.coins < duel.bet) {
+        activeGames.delete(duelId);
+        return interaction.update({ 
+          content: `❌ ${opponent.username} ya no tiene suficientes monedas.`, 
+          embeds: [], 
+          components: [] 
+        });
+      }
+
+      // Animación del duelo
+      const loadingEmbed = new EmbedBuilder()
+        .setColor('#f39c12')
+        .setTitle('⚔️ Duelo en Progreso')
+        .setDescription('🪙 **Lanzando moneda...**');
+
+      await interaction.update({ embeds: [loadingEmbed], components: [] });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      loadingEmbed.setDescription('💫 **Girando...**').setColor('#e67e22');
+      await interaction.editReply({ embeds: [loadingEmbed] });
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      loadingEmbed.setDescription('✨ **Cayendo...**').setColor('#f1c40f');
+      await interaction.editReply({ embeds: [loadingEmbed] });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Determinar ganador
+      const winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+      const loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+      
+      const winnerData = getUser(winner);
+      const loserData = getUser(loser);
+
+      winnerData.coins += duel.bet;
+      loserData.coins -= duel.bet;
+
+      winnerData.stats.gamesPlayed++;
+      winnerData.stats.gamesWon++;
+      winnerData.stats.totalWinnings += duel.bet;
+
+      loserData.stats.gamesPlayed++;
+      loserData.stats.gamesLost++;
+      loserData.stats.totalLosses += duel.bet;
+
+      updateUser(winner, winnerData);
+      updateUser(loser, loserData);
+
+      const winnerUser = winner === duel.challenger ? challenger : opponent;
+      const loserUser = loser === duel.challenger ? challenger : opponent;
+
+      const resultEmbed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('⚔️ Resultado del Duelo')
+        .setDescription(`╔═══════════════════════╗\n║                                              ║\n║   🏆 **¡${winnerUser.username.toUpperCase()} GANA!** 🏆   ║\n║                                              ║\n╚═══════════════════════╝`)
+        .addFields(
+          { name: '👑 Ganador', value: `${winnerUser}\n+${duel.bet.toLocaleString()} 🪙`, inline: true },
+          { name: '💔 Perdedor', value: `${loserUser}\n-${duel.bet.toLocaleString()} 🪙`, inline: true },
+          { name: '\u200b', value: '\u200b', inline: true },
+          { name: '💰 Nuevo balance (Ganador)', value: `${winnerData.coins.toLocaleString()} 🪙`, inline: true },
+          { name: '💰 Nuevo balance (Perdedor)', value: `${loserData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: '¡Buen duelo! Usa /duel para retar a alguien más' })
+        .setTimestamp();
+
+      activeGames.delete(duelId);
+      await interaction.editReply({ embeds: [resultEmbed] });
+    }
+  }
+
+  // ========== TIENDA DE ITEMS ==========
+  if (interaction.isChatInputCommand() && interaction.commandName === 'shop') {
+    const shopItems = [
+      { id: 'lucky_charm', name: '🍀 Amuleto de la Suerte', price: 5000, description: '+10% de probabilidad de ganar por 24h' },
+      { id: 'shield', name: '🛡️ Escudo Protector', price: 3000, description: 'Protege el 50% de pérdidas por 12h' },
+      { id: 'multiplier', name: '💎 Multiplicador x2', price: 10000, description: 'Duplica ganancias por 1 hora' },
+      { id: 'daily_boost', name: '⚡ Boost Diario', price: 2000, description: 'Daily da 500 monedas extra por 7 días' },
+      { id: 'vip_title', name: '👑 Título VIP', price: 15000, description: 'Título permanente "VIP" en tu perfil' }
+    ];
+
+    const embed = new EmbedBuilder()
+      .setColor('#f1c40f')
+      .setTitle('🛒 Tienda de Items')
+      .setDescription('Compra items especiales con tus monedas. Usa `/buy <nombre>` para comprar.\n━━━━━━━━━━━━━━━━━━━━')
+      .setFooter({ text: `💰 Tu balance: ${getUser(interaction.user.id).coins.toLocaleString()} 🪙` });
+
+    shopItems.forEach(item => {
+      embed.addFields({
+        name: `${item.name} - ${item.price.toLocaleString()} 🪙`,
+        value: `${item.description}\n\`/buy ${item.id}\``,
+        inline: false
+      });
+    });
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'buy') {
+    const itemId = interaction.options.getString('item');
+    const userData = getUser(interaction.user.id);
+
+    const shopItems = {
+      'lucky_charm': { name: '🍀 Amuleto de la Suerte', price: 5000, duration: 86400000 },
+      'shield': { name: '🛡️ Escudo Protector', price: 3000, duration: 43200000 },
+      'multiplier': { name: '💎 Multiplicador x2', price: 10000, duration: 3600000 },
+      'daily_boost': { name: '⚡ Boost Diario', price: 2000, duration: 604800000 },
+      'vip_title': { name: '👑 Título VIP', price: 15000, duration: null }
+    };
+
+    const item = shopItems[itemId];
+    if (!item) {
+      return interaction.reply({ content: '❌ Item no encontrado. Usa `/shop` para ver items disponibles.', flags: 64 });
+    }
+
+    if (userData.coins < item.price) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas.\n💰 Precio: **${item.price.toLocaleString()}** 🪙\n💰 Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    // Verificar si ya tiene el item
+    const existingItem = userData.inventory.find(i => i.id === itemId && i.expires > Date.now());
+    if (existingItem) {
+      return interaction.reply({ content: `❌ Ya tienes **${item.name}** activo.`, flags: 64 });
+    }
+
+    userData.coins -= item.price;
+    
+    if (itemId === 'vip_title') {
+      if (!userData.titles.includes('👑 VIP')) {
+        userData.titles.push('👑 VIP');
+      }
+    } else {
+      userData.inventory.push({
+        id: itemId,
+        name: item.name,
+        purchasedAt: Date.now(),
+        expires: Date.now() + item.duration
+      });
+    }
+
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('✅ Compra Exitosa')
+      .setDescription(`Has comprado **${item.name}**`)
+      .addFields(
+        { name: '💰 Precio', value: `${item.price.toLocaleString()} 🪙`, inline: true },
+        { name: '💵 Nuevo balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === 'inventory') {
+    const targetUser = interaction.options.getUser('usuario') || interaction.user;
+    const userData = getUser(targetUser.id);
+
+    const activeItems = userData.inventory.filter(item => item.expires > Date.now());
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle(`🎒 Inventario de ${targetUser.username}`)
+      .setDescription(activeItems.length > 0 ? 'Items activos:' : 'No tienes items activos.')
+      .setTimestamp();
+
+    if (activeItems.length > 0) {
+      activeItems.forEach(item => {
+        const timeLeft = Math.floor((item.expires - Date.now()) / 1000 / 60);
+        embed.addFields({
+          name: item.name,
+          value: `⏱️ Expira en: ${timeLeft} minutos`,
+          inline: true
+        });
+      });
+    }
+
+    if (userData.titles.length > 0) {
+      embed.addFields({
+        name: '🏆 Títulos',
+        value: userData.titles.join(', '),
+        inline: false
+      });
+    }
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // ========== TEMPLATES DE RESPUESTAS (STAFF) ==========
+  if (interaction.isChatInputCommand() && interaction.commandName === 'respuesta') {
+    const staffRoleIds = getStaffRoles();
+    const hasStaffRole = interaction.member.roles.cache.some(role => staffRoleIds.includes(role.id));
+    
+    if (!hasStaffRole && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ Este comando es solo para el Staff.', flags: 64 });
+    }
+
+    const template = interaction.options.getString('template');
+    
+    const templates = {
+      'bienvenida': '¡Hola! Gracias por contactarnos. Un miembro del staff te atenderá pronto. Por favor, describe tu problema o consulta con el mayor detalle posible.',
+      'en_revision': 'Estamos revisando tu caso. Te responderemos lo antes posible con una solución.',
+      'necesita_pruebas': 'Para continuar con tu solicitud, necesitamos que proporciones pruebas (capturas de pantalla, videos, etc.). Por favor, súbelas en este canal.',
+      'resuelto': '✅ Tu caso ha sido resuelto. Si tienes alguna otra consulta, no dudes en abrir otro ticket. ¡Gracias!',
+      'rechazado': '❌ Lamentablemente tu solicitud ha sido rechazada. Si tienes dudas sobre esta decisión, puedes contactar con un administrador.',
+      'espera': 'Actualmente estamos experimentando un alto volumen de tickets. Agradecemos tu paciencia, te atenderemos lo antes posible.',
+      'cierre': 'Vamos a proceder a cerrar este ticket. Si necesitas algo más, puedes abrir uno nuevo. ¡Gracias por tu comprensión!'
+    };
+
+    const response = templates[template];
+    if (!response) {
+      return interaction.reply({ content: '❌ Template no encontrado.', flags: 64 });
+    }
+
+    await interaction.reply({ content: response });
   }
 });
 
