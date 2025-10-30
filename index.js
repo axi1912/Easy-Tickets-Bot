@@ -158,11 +158,119 @@ client.once('ready', async () => {
   setInterval(() => {
     createBackup();
   }, 3600000);
+
+  // Verificar tickets inactivos cada 30 minutos
+  setInterval(async () => {
+    try {
+      const tickets = loadTickets();
+      const now = Date.now();
+      const inactivityLimit = 48 * 60 * 60 * 1000; // 48 horas en ms
+
+      for (const [channelId, ticket] of Object.entries(tickets)) {
+        if (ticket.status !== 'open') continue;
+        if (!ticket.lastUserActivity) continue;
+
+        const timeSinceLastActivity = now - ticket.lastUserActivity;
+
+        if (timeSinceLastActivity >= inactivityLimit) {
+          try {
+            const channel = await client.channels.fetch(channelId);
+            if (!channel) {
+              delete tickets[channelId];
+              continue;
+            }
+
+            // Avisar que se va a cerrar
+            const warningEmbed = new EmbedBuilder()
+              .setColor('#e67e22')
+              .setTitle('⚠️ Ticket Inactivo')
+              .setDescription('Este ticket será cerrado por inactividad del usuario.')
+              .addFields(
+                { name: '⏰ Última actividad', value: `<t:${Math.floor(ticket.lastUserActivity / 1000)}:R>`, inline: true },
+                { name: '🔒 Cerrando en', value: '30 segundos', inline: true }
+              )
+              .setFooter({ text: 'El usuario no ha respondido en 48 horas' })
+              .setTimestamp();
+
+            await channel.send({ embeds: [warningEmbed] });
+
+            // Esperar 30 segundos antes de cerrar
+            setTimeout(async () => {
+              try {
+                const closedEmbed = new EmbedBuilder()
+                  .setColor('#e74c3c')
+                  .setTitle('🔒 Ticket Cerrado Automáticamente')
+                  .setDescription('Este ticket ha sido cerrado por inactividad del usuario (48 horas sin respuesta).')
+                  .setFooter({ text: '© Ea$y Esports | Sistema Automático' })
+                  .setTimestamp();
+
+                await channel.send({ embeds: [closedEmbed] });
+
+                // Log de cierre automático
+                try {
+                  const canalLogs = await client.channels.fetch(CANAL_LOGS);
+                  const usuario = await client.users.fetch(ticket.userId);
+                  const tipoTicket = ticket.tipo === 'reclutamiento' ? 'Reclutamiento' : 
+                                    ticket.tipo === 'crear_soporte_reporte' ? 'Reporte' :
+                                    ticket.tipo === 'crear_soporte_duda' ? 'Duda' : 'Soporte';
+
+                  const logEmbed = new EmbedBuilder()
+                    .setColor('#e67e22')
+                    .setTitle('🔒 Ticket Cerrado Automáticamente')
+                    .setDescription('⚠️ Ticket cerrado por inactividad del usuario')
+                    .addFields(
+                      { name: '👤 Usuario:', value: `${usuario} (${usuario.tag})`, inline: true },
+                      { name: '📋 Tipo:', value: tipoTicket, inline: true },
+                      { name: '⏰ Inactivo por:', value: '48 horas', inline: true },
+                      { name: '📅 Creado:', value: `<t:${Math.floor(new Date(ticket.createdAt).getTime() / 1000)}:F>`, inline: true },
+                      { name: '🕐 Última actividad:', value: `<t:${Math.floor(ticket.lastUserActivity / 1000)}:R>`, inline: true }
+                    )
+                    .setThumbnail(usuario.displayAvatarURL())
+                    .setFooter({ text: '© Ea$y Esports | Sistema de Auto-cierre' })
+                    .setTimestamp();
+
+                  await canalLogs.send({ embeds: [logEmbed] });
+                } catch (error) {
+                  console.error('Error al enviar log de auto-cierre:', error);
+                }
+
+                // Eliminar ticket del registro y canal
+                delete tickets[channelId];
+                saveTickets(tickets);
+
+                setTimeout(async () => {
+                  await channel.delete().catch(console.error);
+                }, 5000);
+
+              } catch (error) {
+                console.error('Error al cerrar ticket automáticamente:', error);
+              }
+            }, 30000);
+
+          } catch (error) {
+            console.error('Error al procesar ticket inactivo:', error);
+          }
+        }
+      }
+      
+      saveTickets(tickets);
+    } catch (error) {
+      console.error('Error en verificación de tickets inactivos:', error);
+    }
+  }, 1800000); // Cada 30 minutos
 });
 
 // Manejar mensajes para el juego de adivinar el número
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
+
+  // Actualizar actividad del usuario en tickets
+  const tickets = loadTickets();
+  const ticket = tickets[message.channel.id];
+  if (ticket && ticket.userId === message.author.id && ticket.status === 'open') {
+    ticket.lastUserActivity = Date.now();
+    saveTickets(tickets);
+  }
 
   // Buscar si el usuario tiene un juego activo
   for (const [gameId, game] of activeGames.entries()) {
@@ -353,6 +461,7 @@ client.on('interactionCreate', async interaction => {
       tipo: 'reclutamiento',
       data: { nombre, activision, stats, disponibilidad, presentacion },
       createdAt: new Date().toISOString(),
+      lastUserActivity: Date.now(),
       status: 'open'
     };
     saveTickets(tickets);
@@ -654,6 +763,7 @@ client.on('interactionCreate', async interaction => {
       username: interaction.user.username,
       tipo: interaction.customId,
       createdAt: new Date().toISOString(),
+      lastUserActivity: Date.now(),
       status: 'open'
     };
     saveTickets(tickets);
