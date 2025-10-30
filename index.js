@@ -109,11 +109,10 @@ function updateUser(userId, data) {
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
   
-  // Registrar comandos llamando a la función de register.js
+  // Registrar comandos ejecutando register.js
   try {
     console.log('🔄 Registrando comandos slash...');
-    const registerCommands = require('./register.js');
-    await registerCommands();
+    require('./register.js');
   } catch (error) {
     console.error('❌ Error registrando comandos:', error);
   }
