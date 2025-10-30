@@ -109,14 +109,13 @@ function updateUser(userId, data) {
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
   
-  // Registrar comandos llamando a register.js
+  // Registrar comandos llamando a la función de register.js
   try {
-    console.log('🔄 Ejecutando register.js para registrar comandos...');
-    const { execSync } = require('child_process');
-    execSync('node register.js', { stdio: 'inherit' });
-    console.log('✅ Comandos registrados');
+    console.log('🔄 Registrando comandos slash...');
+    const registerCommands = require('./register.js');
+    await registerCommands();
   } catch (error) {
-    console.error('❌ Error registrando comandos:', error.message);
+    console.error('❌ Error registrando comandos:', error);
   }
   
   // Crear backup inicial
