@@ -78,13 +78,37 @@ function saveEconomy(economy) {
   fs.writeFileSync(ECONOMY_FILE, JSON.stringify(economy, null, 2));
 }
 
+// Generar misiones diarias aleatorias
+function generateDailyQuests() {
+  const possibleQuests = [
+    { id: 'play_games', description: 'Juega 3 partidas en el casino', reward: 150, goal: 3, progress: 0 },
+    { id: 'win_games', description: 'Gana 2 partidas', reward: 200, goal: 2, progress: 0 },
+    { id: 'work', description: 'Trabaja 2 veces', reward: 100, goal: 2, progress: 0 },
+    { id: 'transfer', description: 'Transfiere monedas a otro usuario', reward: 120, goal: 1, progress: 0 },
+    { id: 'daily', description: 'Reclama tu daily', reward: 80, goal: 1, progress: 0 },
+    { id: 'spend', description: 'Gasta 500 monedas', reward: 180, goal: 500, progress: 0 },
+    { id: 'duel', description: 'Participa en un duelo', reward: 150, goal: 1, progress: 0 }
+  ];
+
+  // Seleccionar 3 misiones aleatorias
+  const shuffled = possibleQuests.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3).map((q, i) => ({ ...q, id: `quest_${i}` }));
+}
+
 // Obtener o crear usuario de economía
 function getUser(userId) {
   const economy = loadEconomy();
   if (!economy[userId]) {
     economy[userId] = {
       coins: 1000,
+      bank: 0,
       lastDaily: 0,
+      lastWork: 0,
+      lastSpin: 0,
+      lastActive: Date.now(),
+      streak: 0,
+      loan: null, // { amount, deadline, paid }
+      quests: [],
       inventory: [],
       titles: [],
       stats: {
@@ -97,6 +121,16 @@ function getUser(userId) {
     };
     saveEconomy(economy);
   }
+  
+  // Migrar usuarios existentes
+  if (economy[userId].bank === undefined) economy[userId].bank = 0;
+  if (economy[userId].lastWork === undefined) economy[userId].lastWork = 0;
+  if (economy[userId].lastSpin === undefined) economy[userId].lastSpin = 0;
+  if (economy[userId].lastActive === undefined) economy[userId].lastActive = Date.now();
+  if (economy[userId].streak === undefined) economy[userId].streak = 0;
+  if (economy[userId].loan === undefined) economy[userId].loan = null;
+  if (economy[userId].quests === undefined) economy[userId].quests = [];
+  
   return economy[userId];
 }
 
@@ -800,6 +834,424 @@ client.on('interactionCreate', async interaction => {
       )
       .setFooter({ text: '💡 Tip: Las transferencias tienen una comisión del 5%' })
       .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // WORK - Trabajar para ganar monedas
+  if (interaction.isChatInputCommand() && interaction.commandName === 'work') {
+    const userData = getUser(interaction.user.id);
+    const now = Date.now();
+    const cooldown = 3600000; // 1 hora en ms
+
+    if (userData.lastWork && (now - userData.lastWork) < cooldown) {
+      const timeLeft = cooldown - (now - userData.lastWork);
+      const minutes = Math.floor(timeLeft / 60000);
+      return interaction.reply({ 
+        content: `⏰ Ya has trabajado recientemente. Puedes trabajar de nuevo en **${minutes}** minutos.`, 
+        flags: 64 
+      });
+    }
+
+    const jobs = [
+      { name: 'Programador', emoji: '💻', min: 100, max: 250 },
+      { name: 'Chef', emoji: '👨‍🍳', min: 80, max: 180 },
+      { name: 'Conductor', emoji: '🚗', min: 70, max: 150 },
+      { name: 'Profesor', emoji: '👨‍🏫', min: 90, max: 200 },
+      { name: 'Médico', emoji: '👨‍⚕️', min: 120, max: 280 },
+      { name: 'Streamer', emoji: '🎮', min: 50, max: 300 }
+    ];
+
+    const job = jobs[Math.floor(Math.random() * jobs.length)];
+    const earned = Math.floor(Math.random() * (job.max - job.min + 1)) + job.min;
+
+    userData.coins += earned;
+    userData.lastWork = now;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle(`${job.emoji} ¡Trabajo Completado!`)
+      .setDescription(`Has trabajado como **${job.name}** y ganaste **${earned.toLocaleString()}** 🪙`)
+      .addFields(
+        { name: '💰 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '⏰ Próximo trabajo', value: 'En 1 hora', inline: true }
+      )
+      .setFooter({ text: '💡 Tip: Trabaja cada hora para maximizar tus ganancias' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // BANK - Sistema bancario
+  if (interaction.isChatInputCommand() && interaction.commandName === 'bank') {
+    const action = interaction.options.getString('accion');
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    if (action === 'balance') {
+      const totalWealth = userData.coins + userData.bank;
+      const embed = new EmbedBuilder()
+        .setColor('#3498db')
+        .setTitle('🏦 Tu Banco Personal')
+        .addFields(
+          { name: '💰 En mano', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+          { name: '🏦 En banco', value: `${userData.bank.toLocaleString()} 🪙`, inline: true },
+          { name: '💎 Total', value: `${totalWealth.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: '💡 Las monedas en el banco generan 1% de interés diario' })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    if (!amount || amount <= 0) {
+      return interaction.reply({ content: '❌ Debes especificar una cantidad válida.', flags: 64 });
+    }
+
+    if (action === 'deposit') {
+      if (userData.coins < amount) {
+        return interaction.reply({ 
+          content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+          flags: 64 
+        });
+      }
+
+      userData.coins -= amount;
+      userData.bank += amount;
+      updateUser(interaction.user.id, userData);
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🏦 Depósito Exitoso')
+        .setDescription(`Has depositado **${amount.toLocaleString()}** 🪙 en tu banco`)
+        .addFields(
+          { name: '💰 En mano', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+          { name: '🏦 En banco', value: `${userData.bank.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: '💡 Tu dinero en el banco está seguro y genera intereses' });
+
+      await interaction.reply({ embeds: [embed] });
+
+    } else if (action === 'withdraw') {
+      if (userData.bank < amount) {
+        return interaction.reply({ 
+          content: `❌ No tienes suficientes monedas en el banco. Tienes: **${userData.bank.toLocaleString()}** 🪙`, 
+          flags: 64 
+        });
+      }
+
+      userData.bank -= amount;
+      userData.coins += amount;
+      updateUser(interaction.user.id, userData);
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('🏦 Retiro Exitoso')
+        .setDescription(`Has retirado **${amount.toLocaleString()}** 🪙 de tu banco`)
+        .addFields(
+          { name: '💰 En mano', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+          { name: '🏦 En banco', value: `${userData.bank.toLocaleString()} 🪙`, inline: true }
+        );
+
+      await interaction.reply({ embeds: [embed] });
+    }
+  }
+
+  // LOAN - Sistema de préstamos
+  if (interaction.isChatInputCommand() && interaction.commandName === 'loan') {
+    const action = interaction.options.getString('accion');
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    if (action === 'status') {
+      if (!userData.loan) {
+        return interaction.reply({ content: '✅ No tienes ningún préstamo activo.', flags: 64 });
+      }
+
+      const timeLeft = userData.loan.deadline - Date.now();
+      const daysLeft = Math.ceil(timeLeft / 86400000);
+      
+      const embed = new EmbedBuilder()
+        .setColor('#e67e22')
+        .setTitle('💳 Estado de tu Préstamo')
+        .addFields(
+          { name: '💰 Cantidad prestada', value: `${userData.loan.amount.toLocaleString()} 🪙`, inline: true },
+          { name: '📊 Interés (10%)', value: `${Math.floor(userData.loan.amount * 0.1).toLocaleString()} 🪙`, inline: true },
+          { name: '💵 Total a pagar', value: `${Math.floor(userData.loan.amount * 1.1).toLocaleString()} 🪙`, inline: true },
+          { name: '⏰ Tiempo restante', value: `${daysLeft} días`, inline: true },
+          { name: '📋 Estado', value: userData.loan.paid ? '✅ Pagado' : '⚠️ Pendiente', inline: true }
+        )
+        .setFooter({ text: '💡 Usa /loan accion:Pagar para pagar tu préstamo' });
+
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    if (action === 'request') {
+      if (!amount || amount < 100) {
+        return interaction.reply({ content: '❌ El préstamo mínimo es de 100 monedas.', flags: 64 });
+      }
+
+      if (userData.loan && !userData.loan.paid) {
+        return interaction.reply({ content: '❌ Ya tienes un préstamo activo. Págalo antes de pedir otro.', flags: 64 });
+      }
+
+      const maxLoan = 5000;
+      if (amount > maxLoan) {
+        return interaction.reply({ 
+          content: `❌ El préstamo máximo es de **${maxLoan.toLocaleString()}** 🪙`, 
+          flags: 64 
+        });
+      }
+
+      const deadline = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 días
+      userData.loan = {
+        amount,
+        deadline,
+        paid: false
+      };
+      userData.coins += amount;
+      updateUser(interaction.user.id, userData);
+
+      const interest = Math.floor(amount * 0.1);
+      const totalPayback = Math.floor(amount * 1.1);
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('💳 Préstamo Aprobado')
+        .setDescription(`Has recibido un préstamo de **${amount.toLocaleString()}** 🪙`)
+        .addFields(
+          { name: '💰 Cantidad recibida', value: `${amount.toLocaleString()} 🪙`, inline: true },
+          { name: '📊 Interés (10%)', value: `${interest.toLocaleString()} 🪙`, inline: true },
+          { name: '💵 Total a pagar', value: `${totalPayback.toLocaleString()} 🪙`, inline: true },
+          { name: '⏰ Plazo', value: '7 días', inline: true },
+          { name: '💰 Nuevo balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: '⚠️ Si no pagas a tiempo, perderás acceso a futuros préstamos' });
+
+      await interaction.reply({ embeds: [embed] });
+
+    } else if (action === 'pay') {
+      if (!userData.loan) {
+        return interaction.reply({ content: '❌ No tienes ningún préstamo que pagar.', flags: 64 });
+      }
+
+      if (userData.loan.paid) {
+        return interaction.reply({ content: '✅ Ya has pagado este préstamo.', flags: 64 });
+      }
+
+      const payAmount = amount || Math.floor(userData.loan.amount * 1.1);
+      const totalDebt = Math.floor(userData.loan.amount * 1.1);
+
+      if (amount && amount < totalDebt) {
+        return interaction.reply({ 
+          content: `❌ Debes pagar el total: **${totalDebt.toLocaleString()}** 🪙 (o no especifiques cantidad para pagar todo)`, 
+          flags: 64 
+        });
+      }
+
+      if (userData.coins < totalDebt) {
+        return interaction.reply({ 
+          content: `❌ No tienes suficientes monedas. Necesitas: **${totalDebt.toLocaleString()}** 🪙`, 
+          flags: 64 
+        });
+      }
+
+      userData.coins -= totalDebt;
+      userData.loan.paid = true;
+      updateUser(interaction.user.id, userData);
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('💳 Préstamo Pagado')
+        .setDescription(`¡Has pagado tu préstamo exitosamente!`)
+        .addFields(
+          { name: '💵 Cantidad pagada', value: `${totalDebt.toLocaleString()} 🪙`, inline: true },
+          { name: '💰 Nuevo balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: '✅ Ahora puedes solicitar un nuevo préstamo cuando lo necesites' });
+
+      await interaction.reply({ embeds: [embed] });
+    }
+  }
+
+  // DAILY-QUEST - Misiones diarias
+  if (interaction.isChatInputCommand() && interaction.commandName === 'daily-quest') {
+    const userData = getUser(interaction.user.id);
+    const now = Date.now();
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+
+    // Generar nuevas misiones si es necesario
+    if (!userData.quests || userData.quests.length === 0 || !userData.lastQuestReset || userData.lastQuestReset < oneDayAgo) {
+      userData.quests = generateDailyQuests();
+      userData.lastQuestReset = now;
+      updateUser(interaction.user.id, userData);
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle('📋 Misiones Diarias')
+      .setDescription('Completa misiones para ganar recompensas extra!')
+      .setFooter({ text: '💡 Las misiones se renuevan cada 24 horas' })
+      .setTimestamp();
+
+    for (let i = 0; i < userData.quests.length; i++) {
+      const quest = userData.quests[i];
+      const status = quest.completed ? '✅' : '⏳';
+      const progressBar = '█'.repeat(Math.floor((quest.progress / quest.goal) * 10)) + '░'.repeat(10 - Math.floor((quest.progress / quest.goal) * 10));
+      
+      embed.addFields({
+        name: `${status} Misión ${i + 1}`,
+        value: `${quest.description}\n${progressBar} **${quest.progress}/${quest.goal}**\n🎁 Recompensa: **${quest.reward.toLocaleString()}** 🪙`,
+        inline: false
+      });
+    }
+
+    const allCompleted = userData.quests.every(q => q.completed);
+    if (allCompleted && !userData.questsClaimedToday) {
+      const totalReward = userData.quests.reduce((sum, q) => sum + q.reward, 0);
+      userData.coins += totalReward;
+      userData.questsClaimedToday = true;
+      updateUser(interaction.user.id, userData);
+
+      embed.setDescription(`🎉 **¡Todas las misiones completadas!**\nHas ganado **${totalReward.toLocaleString()}** 🪙`);
+      embed.setColor('#2ecc71');
+    }
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // SPIN - Ruleta de premios
+  if (interaction.isChatInputCommand() && interaction.commandName === 'spin') {
+    const userData = getUser(interaction.user.id);
+    const now = Date.now();
+    const cooldown = 86400000; // 24 horas
+
+    if (userData.lastSpin && (now - userData.lastSpin) < cooldown) {
+      const timeLeft = cooldown - (now - userData.lastSpin);
+      const hours = Math.floor(timeLeft / 3600000);
+      return interaction.reply({ 
+        content: `⏰ Ya has usado la ruleta hoy. Vuelve en **${hours}** horas.`, 
+        flags: 64 
+      });
+    }
+
+    const loadingEmbed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🎰 Ruleta de Premios')
+      .setDescription('🎲 **Girando la ruleta...**');
+
+    await interaction.reply({ embeds: [loadingEmbed] });
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const prizes = [
+      { name: '💰 50 Monedas', value: 50, emoji: '💰', chance: 30 },
+      { name: '💵 100 Monedas', value: 100, emoji: '💵', chance: 25 },
+      { name: '💎 250 Monedas', value: 250, emoji: '💎', chance: 20 },
+      { name: '🌟 500 Monedas', value: 500, emoji: '🌟', chance: 15 },
+      { name: '👑 1000 Monedas', value: 1000, emoji: '👑', chance: 7 },
+      { name: '🎁 Item Aleatorio', value: 'item', emoji: '🎁', chance: 3 }
+    ];
+
+    let roll = Math.random() * 100;
+    let selectedPrize = null;
+    
+    for (let prize of prizes) {
+      if (roll <= prize.chance) {
+        selectedPrize = prize;
+        break;
+      }
+      roll -= prize.chance;
+    }
+
+    if (!selectedPrize) selectedPrize = prizes[0];
+
+    if (selectedPrize.value === 'item') {
+      const items = ['lucky_charm', 'shield', 'multiplier', 'daily_boost'];
+      const randomItem = items[Math.floor(Math.random() * items.length)];
+      userData.inventory.push(randomItem);
+      selectedPrize.name = `🎁 ${randomItem.replace('_', ' ')}`;
+    } else {
+      userData.coins += selectedPrize.value;
+    }
+
+    userData.lastSpin = now;
+    updateUser(interaction.user.id, userData);
+
+    const resultEmbed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('🎰 ¡Resultado de la Ruleta!')
+      .setDescription(`${selectedPrize.emoji} **${selectedPrize.name}**`)
+      .addFields(
+        { name: '💰 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '⏰ Próximo Spin', value: 'En 24 horas', inline: true }
+      )
+      .setFooter({ text: '🎰 ¡Vuelve mañana para otro spin gratis!' })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [resultEmbed] });
+  }
+
+  // STREAK - Ver racha de días consecutivos
+  if (interaction.isChatInputCommand() && interaction.commandName === 'streak') {
+    const userData = getUser(interaction.user.id);
+    const now = Date.now();
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+    const twoDaysAgo = now - (48 * 60 * 60 * 1000);
+
+    // Verificar si la racha se rompió
+    if (userData.lastActive && userData.lastActive < twoDaysAgo) {
+      userData.streak = 0;
+    }
+
+    // Incrementar racha si es un nuevo día
+    if (!userData.lastActive || userData.lastActive < oneDayAgo) {
+      userData.streak = (userData.streak || 0) + 1;
+      userData.lastActive = now;
+      
+      // Recompensa por racha
+      let bonus = 0;
+      if (userData.streak >= 30) bonus = 500;
+      else if (userData.streak >= 14) bonus = 250;
+      else if (userData.streak >= 7) bonus = 100;
+      else if (userData.streak >= 3) bonus = 50;
+
+      if (bonus > 0) {
+        userData.coins += bonus;
+        updateUser(interaction.user.id, userData);
+      }
+    }
+
+    const milestones = [
+      { days: 3, reward: 50, name: '🔥 Calentando' },
+      { days: 7, reward: 100, name: '⚡ En Llamas' },
+      { days: 14, reward: 250, name: '💫 Imparable' },
+      { days: 30, reward: 500, name: '👑 Leyenda' }
+    ];
+
+    const nextMilestone = milestones.find(m => m.days > userData.streak) || milestones[milestones.length - 1];
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setTitle('🔥 Tu Racha de Actividad')
+      .setDescription(`Has estado activo por **${userData.streak}** días consecutivos!`)
+      .addFields(
+        { name: '📅 Días consecutivos', value: `**${userData.streak}** días`, inline: true },
+        { name: '🎯 Siguiente meta', value: `${nextMilestone.days} días\n🎁 ${nextMilestone.reward} 🪙`, inline: true }
+      )
+      .setFooter({ text: '💡 Mantén tu racha activa cada día para ganar bonificaciones!' })
+      .setTimestamp();
+
+    // Agregar milestones alcanzados
+    const achieved = milestones.filter(m => m.days <= userData.streak);
+    if (achieved.length > 0) {
+      embed.addFields({
+        name: '🏆 Logros Desbloqueados',
+        value: achieved.map(m => `${m.name} (${m.days} días)`).join('\n'),
+        inline: false
+      });
+    }
 
     await interaction.reply({ embeds: [embed] });
   }

@@ -32,6 +32,70 @@ const commands = [
     description: 'Ver el top 10 de usuarios más ricos'
   },
   {
+    name: 'work',
+    description: '💼 Trabajar para ganar monedas (cooldown: 1 hora)'
+  },
+  {
+    name: 'bank',
+    description: '🏦 Gestionar tu banco personal',
+    options: [
+      {
+        name: 'accion',
+        description: 'Acción a realizar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '💰 Depositar', value: 'deposit' },
+          { name: '💸 Retirar', value: 'withdraw' },
+          { name: '📊 Ver Balance', value: 'balance' }
+        ]
+      },
+      {
+        name: 'cantidad',
+        description: 'Cantidad de monedas (solo para depositar/retirar)',
+        type: 4,
+        required: false,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'loan',
+    description: '💳 Sistema de préstamos',
+    options: [
+      {
+        name: 'accion',
+        description: 'Acción a realizar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '📝 Pedir préstamo', value: 'request' },
+          { name: '💵 Pagar préstamo', value: 'pay' },
+          { name: '📋 Ver estado', value: 'status' }
+        ]
+      },
+      {
+        name: 'cantidad',
+        description: 'Cantidad a pedir/pagar',
+        type: 4,
+        required: false,
+        min_value: 100
+      }
+    ]
+  },
+  {
+    name: 'daily-quest',
+    description: '📋 Ver y completar misiones diarias'
+  },
+  {
+    name: 'spin',
+    description: '🎰 Girar la ruleta de premios (1 vez al día gratis)'
+  },
+  {
+    name: 'streak',
+    description: '🔥 Ver tu racha de días consecutivos'
+  },
+  {
     name: 'give',
     description: 'Regalar monedas a otro usuario',
     options: [
