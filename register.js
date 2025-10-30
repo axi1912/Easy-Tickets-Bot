@@ -356,26 +356,12 @@ const commands = [
     ]
   },
   {
-    name: 'guia',
-    description: '📖 Ver la guía de comandos del bot',
-    options: [
-      {
-        name: 'seccion',
-        description: 'Sección de la guía que deseas ver',
-        type: 3,
-        required: false,
-        choices: [
-          { name: '🎫 Sistema de Tickets', value: 'tickets' },
-          { name: '💰 Economía Básica', value: 'economia' },
-          { name: '💼 Economía Avanzada', value: 'economia_avanzada' },
-          { name: '🎮 Juegos de Casino', value: 'juegos' },
-          { name: '⚔️ Sistema de Duelos', value: 'duelos' },
-          { name: '🛒 Tienda e Inventario', value: 'tienda' },
-          { name: '🎯 Entretenimiento', value: 'entretenimiento' },
-          { name: '👨‍💼 Comandos Staff', value: 'staff' }
-        ]
-      }
-    ]
+    name: 'guia-usuarios',
+    description: '📖 Enviar guía completa de comandos para usuarios'
+  },
+  {
+    name: 'guia-staff',
+    description: '👨‍� [STAFF] Enviar guía completa de comandos para staff'
   },
   {
     name: 'respuesta',
