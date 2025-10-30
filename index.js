@@ -837,21 +837,30 @@ client.on('interactionCreate', async interaction => {
         { name: '🎯 Objetivo', value: '**21** puntos', inline: true }
       );
 
-    await interaction.reply({ embeds: [loadingEmbed] });
+    try {
+      await interaction.reply({ embeds: [loadingEmbed] });
 
-    // Animación de mezclar
-    const shuffleFrames = [
-      { text: '🎴 **MEZCLANDO**', color: '#2c3e50' },
-      { text: '🃏 **MEZCLANDO**', color: '#34495e' },
-      { text: '🎴 **REPARTIENDO**', color: '#2c3e50' },
-      { text: '🃏 **REPARTIENDO**', color: '#34495e' }
-    ];
+      // Animación de mezclar
+      const shuffleFrames = [
+        { text: '🎴 **MEZCLANDO**', color: '#2c3e50' },
+        { text: '🃏 **MEZCLANDO**', color: '#34495e' },
+        { text: '🎴 **REPARTIENDO**', color: '#2c3e50' },
+        { text: '🃏 **REPARTIENDO**', color: '#34495e' }
+      ];
 
-    for (let i = 0; i < shuffleFrames.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      loadingEmbed.setColor(shuffleFrames[i].color);
-      loadingEmbed.setDescription(`╔══════════════════════╗\n║                                          ║\n║       ${shuffleFrames[i].text}      ║\n║                                          ║\n╚══════════════════════╝`);
-      await interaction.editReply({ embeds: [loadingEmbed] });
+      for (let i = 0; i < shuffleFrames.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        loadingEmbed.setColor(shuffleFrames[i].color);
+        loadingEmbed.setDescription(`╔══════════════════════╗\n║                                          ║\n║       ${shuffleFrames[i].text}      ║\n║                                          ║\n╚══════════════════════╝`);
+        try {
+          await interaction.editReply({ embeds: [loadingEmbed] });
+        } catch (err) {
+          console.error('Error editReply during blackjack animation:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Blackjack initial error:', err);
+      return interaction.reply({ content: '❌ Error al iniciar el juego. Intenta de nuevo.', flags: 64 }).catch(() => {});
     }
 
     // Crear baraja y repartir cartas
@@ -1174,6 +1183,16 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, flags: 64 });
     }
 
+    // Evitar que el usuario abra múltiples coinflips simultáneos
+    const gameId = `coinflip_${interaction.user.id}_${Date.now()}`;
+    for (const g of activeGames.values()) {
+      if (g.userId === interaction.user.id && g.game === 'coinflip') {
+        return interaction.reply({ content: '❌ Ya tienes un coinflip en curso. Espera a que termine.', flags: 64 });
+      }
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, game: 'coinflip', bet });
+
     // Animación mejorada de moneda girando
     const loadingEmbed = new EmbedBuilder()
       .setColor('#f39c12')
@@ -1184,56 +1203,69 @@ client.on('interactionCreate', async interaction => {
         { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true }
       );
 
-    await interaction.reply({ embeds: [loadingEmbed] });
+    try {
+      await interaction.reply({ embeds: [loadingEmbed] });
 
-    // Animación más elaborada
-    const frames = [
-      { emoji: '🪙', text: '**GIRANDO**', color: '#f39c12' },
-      { emoji: '💫', text: '**GIRANDO**', color: '#e67e22' },
-      { emoji: '✨', text: '**GIRANDO**', color: '#d35400' },
-      { emoji: '🌟', text: '**GIRANDO**', color: '#f39c12' },
-      { emoji: '💫', text: '**GIRANDO**', color: '#e67e22' },
-      { emoji: '⭐', text: '**CAYENDO**', color: '#f1c40f' },
-      { emoji: '🪙', text: '**CAYENDO**', color: '#f39c12' }
-    ];
+      // Animación más elaborada
+      const frames = [
+        { emoji: '🪙', text: '**GIRANDO**', color: '#f39c12' },
+        { emoji: '💫', text: '**GIRANDO**', color: '#e67e22' },
+        { emoji: '✨', text: '**GIRANDO**', color: '#d35400' },
+        { emoji: '🌟', text: '**GIRANDO**', color: '#f39c12' },
+        { emoji: '💫', text: '**GIRANDO**', color: '#e67e22' },
+        { emoji: '⭐', text: '**CAYENDO**', color: '#f1c40f' },
+        { emoji: '🪙', text: '**CAYENDO**', color: '#f39c12' }
+      ];
 
-    for (let i = 0; i < frames.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      loadingEmbed.setColor(frames[i].color);
-      loadingEmbed.setDescription(`┏━━━━━━━━━━━━━━━━━━┓\n┃                                        ┃\n┃        ${frames[i].emoji} ${frames[i].text}      ┃\n┃                                        ┃\n┗━━━━━━━━━━━━━━━━━━┛`);
-      await interaction.editReply({ embeds: [loadingEmbed] });
+      for (let i = 0; i < frames.length; i++) {
+        // pequeño delay entre frames
+        await new Promise(resolve => setTimeout(resolve, 300));
+        loadingEmbed.setColor(frames[i].color);
+        loadingEmbed.setDescription(`┏━━━━━━━━━━━━━━━━━━┓\n┃                                        ┃\n┃        ${frames[i].emoji} ${frames[i].text}      ┃\n┃                                        ┃\n┗━━━━━━━━━━━━━━━━━━┛`);
+        try {
+          await interaction.editReply({ embeds: [loadingEmbed] });
+        } catch (err) {
+          // No bloqueamos la animación si falla un edit (rate limit u otro)
+          console.error('Error editReply during coinflip animation:', err);
+        }
+      }
+
+      const result = Math.random() < 0.5 ? 'cara' : 'cruz';
+      const won = result === choice;
+
+      const embed = new EmbedBuilder()
+        .setTitle('🪙 Coinflip - Resultado')
+        .addFields(
+          { name: '🎯 Tu elección', value: choice === 'cara' ? '✨ **CARA**' : '💀 **CRUZ**', inline: true },
+          { name: '🎲 Cayó en', value: result === 'cara' ? '✨ **CARA**' : '💀 **CRUZ**', inline: true },
+          { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: false }
+        );
+
+      if (won) {
+        userData.coins += bet;
+        userData.stats.gamesWon++;
+        userData.stats.totalWinnings += bet;
+        embed.setColor('#2ecc71')
+          .setDescription(`╔═══════════════════╗\n║   🎉 **¡GANASTE!** 🎉    ║\n║  **+${bet.toLocaleString()} 🪙**  ║\n╚═══════════════════╝`);
+      } else {
+        userData.coins -= bet;
+        userData.stats.gamesLost++;
+        userData.stats.totalLosses += bet;
+        embed.setColor('#e74c3c')
+          .setDescription(`╔═══════════════════╗\n║   ❌ **PERDISTE** ❌     ║\n║  **-${bet.toLocaleString()} 🪙**  ║\n╚═══════════════════╝`);
+      }
+
+      userData.stats.gamesPlayed++;
+      updateUser(interaction.user.id, userData);
+
+      embed.setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
+      await interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      console.error('Coinflip error:', err);
+      try { await interaction.followUp({ content: '❌ Ocurrió un error ejecutando el coinflip. Intenta de nuevo.', flags: 64 }); } catch(e){}
+    } finally {
+      activeGames.delete(gameId);
     }
-
-    const result = Math.random() < 0.5 ? 'cara' : 'cruz';
-    const won = result === choice;
-
-    const embed = new EmbedBuilder()
-      .setTitle('🪙 Coinflip - Resultado')
-      .addFields(
-        { name: '🎯 Tu elección', value: choice === 'cara' ? '✨ **CARA**' : '💀 **CRUZ**', inline: true },
-        { name: '🎲 Cayó en', value: result === 'cara' ? '✨ **CARA**' : '💀 **CRUZ**', inline: true },
-        { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: false }
-      );
-
-    if (won) {
-      userData.coins += bet;
-      userData.stats.gamesWon++;
-      userData.stats.totalWinnings += bet;
-      embed.setColor('#2ecc71')
-        .setDescription(`╔═══════════════════╗\n║   🎉 **¡GANASTE!** 🎉    ║\n║  **+${bet.toLocaleString()} 🪙**  ║\n╚═══════════════════╝`);
-    } else {
-      userData.coins -= bet;
-      userData.stats.gamesLost++;
-      userData.stats.totalLosses += bet;
-      embed.setColor('#e74c3c')
-        .setDescription(`╔═══════════════════╗\n║   ❌ **PERDISTE** ❌     ║\n║  **-${bet.toLocaleString()} 🪙**  ║\n╚═══════════════════╝`);
-    }
-
-    userData.stats.gamesPlayed++;
-    updateUser(interaction.user.id, userData);
-
-    embed.setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
-    await interaction.editReply({ embeds: [embed] });
   }
 
   // DADOS
@@ -1249,6 +1281,16 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, flags: 64 });
     }
 
+    // Evitar que el usuario abra múltiples juegos de dados simultáneos
+    const gameId = `dice_${interaction.user.id}_${Date.now()}`;
+    for (const g of activeGames.values()) {
+      if (g.userId === interaction.user.id && g.game === 'dice') {
+        return interaction.reply({ content: '❌ Ya tienes un juego de dados en curso. Espera a que termine.', flags: 64 });
+      }
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, game: 'dice', bet });
+
     // Animación mejorada de dados
     const loadingEmbed = new EmbedBuilder()
       .setColor('#e74c3c')
@@ -1259,26 +1301,31 @@ client.on('interactionCreate', async interaction => {
         { name: '🎯 Objetivo', value: '**12** = 3x 💎\n**10-11** = 2x ⭐\n**7-9** = Empate 🤝', inline: true }
       );
 
-    await interaction.reply({ embeds: [loadingEmbed] });
+    try {
+      await interaction.reply({ embeds: [loadingEmbed] });
 
-    // Animación más elaborada de dados girando
-    const diceFrames = [
-      { dice: '⚀ ⚀', text: '**GIRANDO**', color: '#e74c3c' },
-      { dice: '⚁ ⚂', text: '**GIRANDO**', color: '#c0392b' },
-      { dice: '⚃ ⚄', text: '**GIRANDO**', color: '#e74c3c' },
-      { dice: '⚅ ⚀', text: '**GIRANDO**', color: '#c0392b' },
-      { dice: '⚁ ⚃', text: '**RODANDO**', color: '#e67e22' },
-      { dice: '⚄ ⚅', text: '**RODANDO**', color: '#d35400' },
-      { dice: '⚂ ⚁', text: '**RODANDO**', color: '#e67e22' },
-      { dice: '⚅ ⚃', text: '**CAYENDO**', color: '#f39c12' }
-    ];
+      // Animación más elaborada de dados girando
+      const diceFrames = [
+        { dice: '⚀ ⚀', text: '**GIRANDO**', color: '#e74c3c' },
+        { dice: '⚁ ⚂', text: '**GIRANDO**', color: '#c0392b' },
+        { dice: '⚃ ⚄', text: '**GIRANDO**', color: '#e74c3c' },
+        { dice: '⚅ ⚀', text: '**GIRANDO**', color: '#c0392b' },
+        { dice: '⚁ ⚃', text: '**RODANDO**', color: '#e67e22' },
+        { dice: '⚄ ⚅', text: '**RODANDO**', color: '#d35400' },
+        { dice: '⚂ ⚁', text: '**RODANDO**', color: '#e67e22' },
+        { dice: '⚅ ⚃', text: '**CAYENDO**', color: '#f39c12' }
+      ];
 
-    for (let i = 0; i < diceFrames.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 250));
-      loadingEmbed.setColor(diceFrames[i].color);
-      loadingEmbed.setDescription(`╔══════════════════╗\n║                                      ║\n║   ${diceFrames[i].dice} ${diceFrames[i].text}   ║\n║                                      ║\n╚══════════════════╝`);
-      await interaction.editReply({ embeds: [loadingEmbed] });
-    }
+      for (let i = 0; i < diceFrames.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        loadingEmbed.setColor(diceFrames[i].color);
+        loadingEmbed.setDescription(`╔══════════════════╗\n║                                      ║\n║   ${diceFrames[i].dice} ${diceFrames[i].text}   ║\n║                                      ║\n╚══════════════════╝`);
+        try {
+          await interaction.editReply({ embeds: [loadingEmbed] });
+        } catch (err) {
+          console.error('Error editReply during dice animation:', err);
+        }
+      }
 
     const dice1 = Math.floor(Math.random() * 6) + 1;
     const dice2 = Math.floor(Math.random() * 6) + 1;
@@ -1313,31 +1360,37 @@ client.on('interactionCreate', async interaction => {
       resultBox = `╔═══════════════════╗\n║   ❌ **PERDISTE** ❌   ║\n║   **-${bet.toLocaleString()} 🪙**   ║\n╚═══════════════════╝`;
     }
 
-    userData.coins += winnings;
-    userData.stats.gamesPlayed++;
-    
-    if (winnings > 0) {
-      userData.stats.gamesWon++;
-      userData.stats.totalWinnings += winnings;
-    } else if (winnings < 0) {
-      userData.stats.gamesLost++;
-      userData.stats.totalLosses += Math.abs(winnings);
+      userData.coins += winnings;
+      userData.stats.gamesPlayed++;
+      
+      if (winnings > 0) {
+        userData.stats.gamesWon++;
+        userData.stats.totalWinnings += winnings;
+      } else if (winnings < 0) {
+        userData.stats.gamesLost++;
+        userData.stats.totalLosses += Math.abs(winnings);
+      }
+
+      updateUser(interaction.user.id, userData);
+
+      const embed = new EmbedBuilder()
+        .setColor(color)
+        .setTitle('🎲 Dados - Resultado')
+        .setDescription(resultBox)
+        .addFields(
+          { name: '🎲 Dados', value: `${diceEmojis[dice1-1]} ${diceEmojis[dice2-1]}`, inline: true },
+          { name: '📊 Total', value: `**${total}** puntos`, inline: true },
+          { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true }
+        )
+        .setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
+
+      await interaction.editReply({ embeds: [embed] });
+    } catch (err) {
+      console.error('Dice error:', err);
+      try { await interaction.followUp({ content: '❌ Ocurrió un error ejecutando los dados. Intenta de nuevo.', flags: 64 }); } catch(e){}
+    } finally {
+      activeGames.delete(gameId);
     }
-
-    updateUser(interaction.user.id, userData);
-
-    const embed = new EmbedBuilder()
-      .setColor(color)
-      .setTitle('🎲 Dados - Resultado')
-      .setDescription(resultBox)
-      .addFields(
-        { name: '🎲 Dados', value: `${diceEmojis[dice1-1]} ${diceEmojis[dice2-1]}`, inline: true },
-        { name: '📊 Total', value: `**${total}** puntos`, inline: true },
-        { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true }
-      )
-      .setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
-
-    await interaction.editReply({ embeds: [embed] });
   }
 
   // RULETA
