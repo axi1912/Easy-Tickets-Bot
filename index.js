@@ -147,7 +147,7 @@ client.once('ready', async () => {
     ];
     
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(String(process.env.CLIENT_ID), String(process.env.GUILD_ID)),
       { body: commands }
     );
     
