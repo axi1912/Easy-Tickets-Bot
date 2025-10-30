@@ -8,6 +8,9 @@ node_modules/
 # tickets.json
 # economy.json
 
+# Backups automáticos
+backups/
+
 # Archivos del sistema
 .DS_Store
 Thumbs.db
