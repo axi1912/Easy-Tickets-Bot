@@ -2878,6 +2878,293 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
   }
 
+  // ========== GUÍA DE COMANDOS ==========
+  if (interaction.isChatInputCommand() && interaction.commandName === 'guia') {
+    const seccion = interaction.options.getString('seccion');
+
+    if (!seccion) {
+      // Mostrar menú principal
+      const embed = new EmbedBuilder()
+        .setColor('#3498db')
+        .setTitle('📖 Guía de Comandos - Ea$y Esports Bot')
+        .setDescription('Selecciona una sección usando `/guia seccion:<nombre>` para ver información detallada.')
+        .addFields(
+          { name: '🎫 Sistema de Tickets', value: 'Cómo crear y usar tickets de reclutamiento y soporte', inline: false },
+          { name: '💰 Economía Básica', value: 'Balance, daily, leaderboard, transferencias', inline: false },
+          { name: '💼 Economía Avanzada', value: 'Trabajo, banco, préstamos', inline: false },
+          { name: '🎮 Juegos de Casino', value: 'Los 7 juegos disponibles y cómo jugarlos', inline: false },
+          { name: '⚔️ Sistema de Duelos', value: 'Cómo retar a otros usuarios (5 tipos)', inline: false },
+          { name: '🛒 Tienda e Inventario', value: 'Comprar items y gestionar inventario', inline: false },
+          { name: '🎯 Entretenimiento', value: 'Misiones, ruleta, rachas', inline: false },
+          { name: '👨‍💼 Comandos Staff', value: 'Comandos exclusivos para staff', inline: false }
+        )
+        .setFooter({ text: 'Ejemplo: /guia seccion:juegos' })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [embed], flags: 64 });
+    }
+
+    let embed;
+    
+    if (seccion === 'tickets') {
+      embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🎫 Sistema de Tickets')
+        .setDescription('**Crear Tickets:**')
+        .addFields(
+          { 
+            name: '📝 Reclutamiento', 
+            value: 'Click en "📝 Postularme" en el panel de reclutamiento.\n**Info requerida:** Nombre, Activision ID, Rol/KD, Disponibilidad, Presentación\n**Nota:** Solo un ticket a la vez',
+            inline: false 
+          },
+          { 
+            name: '🐛 Soporte', 
+            value: 'Click en "🐛 Reporte de Bug" o "❓ Duda/Consulta"\n**Auto-cierre:** 48 horas sin respuesta del usuario',
+            inline: false 
+          },
+          {
+            name: '✋ Reclamar Ticket',
+            value: 'Staff puede reclamar tickets para atenderlos',
+            inline: false
+          },
+          {
+            name: '🔒 Cerrar Ticket',
+            value: 'Staff cierra el ticket cuando se resuelve',
+            inline: false
+          }
+        )
+        .setFooter({ text: 'Responde en tu ticket para evitar el auto-cierre' });
+
+    } else if (seccion === 'economia') {
+      embed = new EmbedBuilder()
+        .setColor('#f1c40f')
+        .setTitle('💰 Economía Básica')
+        .addFields(
+          { 
+            name: '`/balance [@usuario]`', 
+            value: 'Ver monedas, banco, inventario y estadísticas',
+            inline: false 
+          },
+          { 
+            name: '`/daily`', 
+            value: '100 monedas gratis cada 24 horas',
+            inline: false 
+          },
+          { 
+            name: '`/leaderboard`', 
+            value: 'Top 10 usuarios más ricos del servidor',
+            inline: false 
+          },
+          { 
+            name: '`/give @usuario <cantidad>`', 
+            value: 'Transfiere monedas (5% de comisión)\n**Ejemplo:** Enviar 1000 = cobran 1050',
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'La comisión ayuda a mantener la economía balanceada' });
+
+    } else if (seccion === 'economia_avanzada') {
+      embed = new EmbedBuilder()
+        .setColor('#e67e22')
+        .setTitle('💼 Economía Avanzada')
+        .addFields(
+          { 
+            name: '`/work`', 
+            value: '**Ganancias:** 50-280 monedas\n**Trabajos:** Programador, Chef, Conductor, Profesor, Médico, Streamer\n**Cooldown:** 1 hora',
+            inline: false 
+          },
+          { 
+            name: '`/bank`', 
+            value: '**Ver Balance** - Dinero en mano y banco\n**Depositar** - Guarda monedas seguras\n**Retirar** - Saca del banco',
+            inline: false 
+          },
+          { 
+            name: '`/loan`', 
+            value: '**Pedir préstamo:** 100-5,000 monedas (10% interés, 7 días)\n**Ver estado** - Revisa tu préstamo\n**Pagar** - Salda tu deuda',
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'Usa el banco para proteger tus monedas' });
+
+    } else if (seccion === 'juegos') {
+      embed = new EmbedBuilder()
+        .setColor('#9b59b6')
+        .setTitle('🎮 Juegos de Casino')
+        .setDescription('Todos los juegos disponibles:')
+        .addFields(
+          { 
+            name: '🪙 `/coinflip`', 
+            value: 'Elige cara o cruz. **Premio:** x2 si aciertas',
+            inline: true 
+          },
+          { 
+            name: '🎲 `/dice`', 
+            value: 'Lanza 2 dados. **Jackpot:** Doble 6 = x5',
+            inline: true 
+          },
+          { 
+            name: '🃏 `/blackjack`', 
+            value: 'Llega a 21. **Blackjack:** x2.5',
+            inline: true 
+          },
+          { 
+            name: '🎰 `/roulette`', 
+            value: 'Rojo, Negro o Verde. **Verde:** x14',
+            inline: true 
+          },
+          { 
+            name: '✊ `/rps`', 
+            value: 'Piedra, Papel o Tijera. **Premio:** x2',
+            inline: true 
+          },
+          { 
+            name: '🔢 `/guess`', 
+            value: 'Adivina 1-100. **1er intento:** x5',
+            inline: true 
+          },
+          { 
+            name: '📊 `/higher-lower`', 
+            value: 'Mayor o menor. **Racha:** x1 por acierto',
+            inline: true 
+          }
+        )
+        .setFooter({ text: 'Juega responsablemente. No apuestes más de lo que puedas perder' });
+
+    } else if (seccion === 'duelos') {
+      embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('⚔️ Sistema de Duelos')
+        .setDescription('**Comando:** `/duel @oponente apuesta:<cantidad> [juego:<tipo>]`')
+        .addFields(
+          { 
+            name: '🪙 Coinflip (defecto)', 
+            value: 'Lanzamiento de moneda al azar',
+            inline: true 
+          },
+          { 
+            name: '🎲 Dados', 
+            value: 'Lanza 2 dados, mayor suma gana',
+            inline: true 
+          },
+          { 
+            name: '🃏 Blackjack', 
+            value: '2 cartas, más cerca de 21 gana',
+            inline: true 
+          },
+          { 
+            name: '✊ Piedra/Papel/Tijera', 
+            value: 'Clásico RPS',
+            inline: true 
+          },
+          { 
+            name: '🔢 Adivinanza', 
+            value: 'Más cerca del número secreto gana',
+            inline: true 
+          },
+          {
+            name: '📋 Cómo funciona',
+            value: '1. Retas al oponente\n2. Tiene 60s para aceptar/rechazar\n3. Juego automático\n4. Ganador recibe las monedas',
+            inline: false
+          }
+        )
+        .setFooter({ text: 'Ejemplo: /duel @amigo apuesta:500 juego:Dados' });
+
+    } else if (seccion === 'tienda') {
+      embed = new EmbedBuilder()
+        .setColor('#1abc9c')
+        .setTitle('🛒 Tienda e Inventario')
+        .addFields(
+          { 
+            name: '`/shop`', 
+            value: 'Ver todos los items disponibles',
+            inline: false 
+          },
+          { 
+            name: '`/buy item:<nombre>`', 
+            value: '**Items disponibles:**\n🍀 Amuleto Suerte - 5,000\n🛡️ Escudo - 3,000\n💎 Multiplicador - 10,000\n⚡ Boost Diario - 2,000\n👑 Título VIP - 15,000',
+            inline: false 
+          },
+          { 
+            name: '`/inventory [@usuario]`', 
+            value: 'Ver tu inventario o el de otro usuario',
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'Guarda monedas para comprar items exclusivos' });
+
+    } else if (seccion === 'entretenimiento') {
+      embed = new EmbedBuilder()
+        .setColor('#f39c12')
+        .setTitle('🎯 Entretenimiento')
+        .addFields(
+          { 
+            name: '`/daily-quest`', 
+            value: '**3 misiones diarias** con recompensas de 80-200 monedas\n**Se renuevan:** Cada 24 horas\n**Ejemplos:** Juega 3 partidas, Gana 2 juegos, Trabaja 2 veces',
+            inline: false 
+          },
+          { 
+            name: '`/spin`', 
+            value: '**Ruleta gratis cada 24h**\n**Premios:** 50-1,000 monedas o items aleatorios\n**Probabilidades:** 50 monedas (30%), 100 (25%), 250 (20%), 500 (15%), 1000 (7%), Item (3%)',
+            inline: false 
+          },
+          { 
+            name: '`/streak`', 
+            value: '**Racha de días consecutivos**\n3 días = +50🪙 | 7 días = +100🪙\n14 días = +250🪙 | 30 días = +500🪙\n**Nota:** Si faltas un día, se reinicia',
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'Mantén tu racha activa para bonos extras' });
+
+    } else if (seccion === 'staff') {
+      const staffRoleIds = getStaffRoles();
+      const hasStaffRole = interaction.member.roles.cache.some(role => staffRoleIds.includes(role.id));
+      
+      if (!hasStaffRole && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: '❌ Esta sección es solo para el Staff.', flags: 64 });
+      }
+
+      embed = new EmbedBuilder()
+        .setColor('#95a5a6')
+        .setTitle('👨‍💼 Comandos Staff')
+        .setDescription('**Gestión de Tickets:**')
+        .addFields(
+          { 
+            name: '`/panel-reclutamiento`', 
+            value: '🔒 Admin - Crea el panel de reclutamiento',
+            inline: false 
+          },
+          { 
+            name: '`/panel-soporte`', 
+            value: '🔒 Admin - Crea el panel de soporte',
+            inline: false 
+          },
+          { 
+            name: 'Botón "✋ Reclamar"', 
+            value: 'Reclama un ticket para atenderlo',
+            inline: true 
+          },
+          { 
+            name: 'Botón "🔒 Cerrar"', 
+            value: 'Cierra el ticket y elimina el canal',
+            inline: true 
+          },
+          { 
+            name: '`/respuesta template:<tipo>`', 
+            value: 'Respuestas predefinidas: Bienvenida, En revisión, Necesita pruebas, Resuelto, Rechazado, En espera, Cerrar',
+            inline: false 
+          },
+          { 
+            name: '**Gestión de Economía:**', 
+            value: '`/add-coins @usuario <cantidad>` - Agregar monedas\n`/remove-coins @usuario <cantidad>` - Quitar monedas',
+            inline: false 
+          }
+        )
+        .setFooter({ text: 'Usa estos comandos responsablemente' });
+    }
+
+    await interaction.reply({ embeds: [embed], flags: 64 });
+  }
+
   // ========== TEMPLATES DE RESPUESTAS (STAFF) ==========
   if (interaction.isChatInputCommand() && interaction.commandName === 'respuesta') {
     const staffRoleIds = getStaffRoles();
