@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits, REST, Routes } = require('discord.js');
 const fs = require('fs');
 require('dotenv').config();
 
@@ -106,8 +106,17 @@ function updateUser(userId, data) {
   saveEconomy(economy);
 }
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
+  
+  // Registrar comandos automáticamente
+  try {
+    console.log('🔄 Registrando comandos slash...');
+    const registerCommands = require('./register.js');
+    await registerCommands();
+  } catch (error) {
+    console.error('❌ Error registrando comandos:', error);
+  }
   
   // Crear backup inicial
   createBackup();

@@ -303,7 +303,7 @@ const commands = [
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
 
-(async () => {
+async function registerCommands() {
   try {
     console.log('Registrando comandos...');
     await rest.put(
@@ -311,7 +311,17 @@ const rest = new REST().setToken(process.env.DISCORD_TOKEN);
       { body: commands }
     );
     console.log('✅ Comandos registrados');
+    return true;
   } catch (error) {
-    console.error(error);
+    console.error('Error registrando comandos:', error);
+    return false;
   }
-})();
+}
+
+// Si se ejecuta directamente (node register.js)
+if (require.main === module) {
+  registerCommands();
+}
+
+// Exportar para usar en index.js
+module.exports = registerCommands;
