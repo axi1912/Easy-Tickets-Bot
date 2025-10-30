@@ -1867,6 +1867,7 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'duel') {
     const opponent = interaction.options.getUser('oponente');
     const bet = interaction.options.getInteger('apuesta');
+    const gameType = interaction.options.getString('juego') || 'coinflip';
     const userData = getUser(interaction.user.id);
 
     if (opponent.id === interaction.user.id) {
@@ -1897,9 +1898,18 @@ client.on('interactionCreate', async interaction => {
       }
     }
 
+    const gameNames = {
+      'coinflip': '🪙 Cara o Cruz',
+      'dice': '🎲 Dados',
+      'blackjack': '🃏 Blackjack',
+      'rps': '✊ Piedra/Papel/Tijera',
+      'guess': '🔢 Adivinanza'
+    };
+
     const duelId = `duel_${interaction.user.id}_${Date.now()}`;
     activeGames.set(duelId, {
       game: 'duel',
+      gameType,
       challenger: interaction.user.id,
       opponent: opponent.id,
       bet,
@@ -1912,7 +1922,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`**${interaction.user}** ha retado a **${opponent}** a un duelo!`)
       .addFields(
         { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true },
-        { name: '🎯 Modalidad', value: 'Cara o Cruz', inline: true },
+        { name: '🎯 Modalidad', value: gameNames[gameType], inline: true },
         { name: '⏱️ Tiempo límite', value: '60 segundos', inline: true }
       )
       .setFooter({ text: 'El retado debe aceptar para comenzar' });
@@ -1990,28 +2000,162 @@ client.on('interactionCreate', async interaction => {
         });
       }
 
-      // Animación del duelo
+      const gameType = duel.gameType || 'coinflip';
+      let winner, loser, resultDetails;
+
+      // Animación inicial
       const loadingEmbed = new EmbedBuilder()
         .setColor('#f39c12')
-        .setTitle('⚔️ Duelo en Progreso')
-        .setDescription('🪙 **Lanzando moneda...**');
+        .setTitle('⚔️ Duelo en Progreso');
 
       await interaction.update({ embeds: [loadingEmbed], components: [] });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      loadingEmbed.setDescription('💫 **Girando...**').setColor('#e67e22');
-      await interaction.editReply({ embeds: [loadingEmbed] });
+      // Ejecutar el juego según el tipo
+      if (gameType === 'coinflip') {
+        loadingEmbed.setDescription('🪙 **Lanzando moneda...**');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      loadingEmbed.setDescription('✨ **Cayendo...**').setColor('#f1c40f');
-      await interaction.editReply({ embeds: [loadingEmbed] });
+        loadingEmbed.setDescription('💫 **Girando...**').setColor('#e67e22');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-      await new Promise(resolve => setTimeout(resolve, 500));
+        loadingEmbed.setDescription('✨ **Cayendo...**').setColor('#f1c40f');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Determinar ganador
-      const winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
-      const loser = winner === duel.challenger ? duel.opponent : duel.challenger;
-      
+        winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+        loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+        const result = Math.random() < 0.5 ? 'Cara' : 'Cruz';
+        resultDetails = `Resultado: **${result}**`;
+
+      } else if (gameType === 'dice') {
+        loadingEmbed.setDescription('🎲 **Lanzando dados...**');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const challengerDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+        const opponentDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+        const challengerSum = challengerDice.reduce((a, b) => a + b, 0);
+        const opponentSum = opponentDice.reduce((a, b) => a + b, 0);
+
+        loadingEmbed.setDescription(`🎲 **Resultados:**\n\n${challenger.username}: [${challengerDice[0]}] [${challengerDice[1]}] = **${challengerSum}**\n${opponent.username}: [${opponentDice[0]}] [${opponentDice[1]}] = **${opponentSum}**`);
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        if (challengerSum > opponentSum) {
+          winner = duel.challenger;
+          loser = duel.opponent;
+        } else if (opponentSum > challengerSum) {
+          winner = duel.opponent;
+          loser = duel.challenger;
+        } else {
+          // Empate - ganador aleatorio
+          winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+          loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+        }
+        resultDetails = `${challenger.username}: **${challengerSum}** | ${opponent.username}: **${opponentSum}**`;
+
+      } else if (gameType === 'blackjack') {
+        loadingEmbed.setDescription('🃏 **Repartiendo cartas...**');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const drawCard = () => Math.min(Math.floor(Math.random() * 13) + 1, 10);
+        const calculateScore = (cards) => {
+          let score = cards.reduce((a, b) => a + b, 0);
+          if (score > 21 && cards.includes(1)) {
+            score -= 10;
+          }
+          return score;
+        };
+
+        const challengerCards = [drawCard(), drawCard()];
+        const opponentCards = [drawCard(), drawCard()];
+        let challengerScore = calculateScore(challengerCards);
+        let opponentScore = calculateScore(opponentCards);
+
+        loadingEmbed.setDescription(`🃏 **Cartas iniciales:**\n\n${challenger.username}: **${challengerScore}**\n${opponent.username}: **${opponentScore}**`);
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        if (challengerScore > opponentScore && challengerScore <= 21) {
+          winner = duel.challenger;
+          loser = duel.opponent;
+        } else if (opponentScore > challengerScore && opponentScore <= 21) {
+          winner = duel.opponent;
+          loser = duel.challenger;
+        } else if (challengerScore > 21 && opponentScore <= 21) {
+          winner = duel.opponent;
+          loser = duel.challenger;
+        } else if (opponentScore > 21 && challengerScore <= 21) {
+          winner = duel.challenger;
+          loser = duel.opponent;
+        } else {
+          winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+          loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+        }
+        resultDetails = `${challenger.username}: **${challengerScore}** | ${opponent.username}: **${opponentScore}**`;
+
+      } else if (gameType === 'rps') {
+        loadingEmbed.setDescription('✊ **Eligiendo jugadas...**');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const choices = ['piedra', 'papel', 'tijera'];
+        const emojis = { 'piedra': '✊', 'papel': '✋', 'tijera': '✌️' };
+        const challengerChoice = choices[Math.floor(Math.random() * 3)];
+        const opponentChoice = choices[Math.floor(Math.random() * 3)];
+
+        loadingEmbed.setDescription(`✊ **Jugadas:**\n\n${challenger.username}: ${emojis[challengerChoice]} **${challengerChoice}**\n${opponent.username}: ${emojis[opponentChoice]} **${opponentChoice}**`);
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        if (challengerChoice === opponentChoice) {
+          winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+          loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+        } else if (
+          (challengerChoice === 'piedra' && opponentChoice === 'tijera') ||
+          (challengerChoice === 'papel' && opponentChoice === 'piedra') ||
+          (challengerChoice === 'tijera' && opponentChoice === 'papel')
+        ) {
+          winner = duel.challenger;
+          loser = duel.opponent;
+        } else {
+          winner = duel.opponent;
+          loser = duel.challenger;
+        }
+        resultDetails = `${emojis[challengerChoice]} vs ${emojis[opponentChoice]}`;
+
+      } else if (gameType === 'guess') {
+        loadingEmbed.setDescription('🔢 **Adivinando número (1-100)...**');
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const targetNumber = Math.floor(Math.random() * 100) + 1;
+        const challengerGuess = Math.floor(Math.random() * 100) + 1;
+        const opponentGuess = Math.floor(Math.random() * 100) + 1;
+        const challengerDiff = Math.abs(targetNumber - challengerGuess);
+        const opponentDiff = Math.abs(targetNumber - opponentGuess);
+
+        loadingEmbed.setDescription(`🔢 **Número secreto: ${targetNumber}**\n\n${challenger.username}: **${challengerGuess}** (diferencia: ${challengerDiff})\n${opponent.username}: **${opponentGuess}** (diferencia: ${opponentDiff})`);
+        await interaction.editReply({ embeds: [loadingEmbed] });
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        if (challengerDiff < opponentDiff) {
+          winner = duel.challenger;
+          loser = duel.opponent;
+        } else if (opponentDiff < challengerDiff) {
+          winner = duel.opponent;
+          loser = duel.challenger;
+        } else {
+          winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
+          loser = winner === duel.challenger ? duel.opponent : duel.challenger;
+        }
+        resultDetails = `Número: **${targetNumber}** | ${challenger.username}: ${challengerGuess} | ${opponent.username}: ${opponentGuess}`;
+      }
+
+      // Actualizar datos de los jugadores
       const winnerData = getUser(winner);
       const loserData = getUser(loser);
 
@@ -2035,7 +2179,7 @@ client.on('interactionCreate', async interaction => {
       const resultEmbed = new EmbedBuilder()
         .setColor('#2ecc71')
         .setTitle('⚔️ Resultado del Duelo')
-        .setDescription(`╔═══════════════════════╗\n║                                              ║\n║   🏆 **¡${winnerUser.username.toUpperCase()} GANA!** 🏆   ║\n║                                              ║\n╚═══════════════════════╝`)
+        .setDescription(`╔═══════════════════════╗\n║                                              ║\n║   🏆 **¡${winnerUser.username.toUpperCase()} GANA!** 🏆   ║\n║                                              ║\n╚═══════════════════════╝\n\n${resultDetails}`)
         .addFields(
           { name: '👑 Ganador', value: `${winnerUser}\n+${duel.bet.toLocaleString()} 🪙`, inline: true },
           { name: '💔 Perdedor', value: `${loserUser}\n-${duel.bet.toLocaleString()} 🪙`, inline: true },

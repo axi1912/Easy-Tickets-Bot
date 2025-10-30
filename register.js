@@ -240,6 +240,19 @@ const commands = [
         type: 4, // INTEGER
         required: true,
         min_value: 1
+      },
+      {
+        name: 'juego',
+        description: 'Tipo de juego para el duelo',
+        type: 3, // STRING
+        required: false,
+        choices: [
+          { name: '🪙 Coinflip (Por defecto)', value: 'coinflip' },
+          { name: '🎲 Dados - Mayor suma gana', value: 'dice' },
+          { name: '🃏 Blackjack - Más cerca de 21', value: 'blackjack' },
+          { name: '✊ Piedra/Papel/Tijera', value: 'rps' },
+          { name: '🔢 Adivinanza - Más cerca gana', value: 'guess' }
+        ]
       }
     ]
   },
