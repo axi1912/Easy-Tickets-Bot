@@ -109,51 +109,14 @@ function updateUser(userId, data) {
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
   
-  // Registrar comandos automáticamente
+  // Registrar comandos llamando a register.js
   try {
-    console.log('🔄 Registrando comandos slash...');
-    console.log('CLIENT_ID:', process.env.CLIENT_ID);
-    console.log('GUILD_ID:', process.env.GUILD_ID);
-    
-    if (!process.env.CLIENT_ID || !process.env.GUILD_ID) {
-      console.error('❌ Faltan variables de entorno: CLIENT_ID o GUILD_ID');
-      console.log('Variables disponibles:', Object.keys(process.env).filter(k => k.includes('ID') || k.includes('TOKEN')));
-      return;
-    }
-    
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    
-    const commands = [
-      { name: 'panel-reclutamiento', description: 'Crea el panel de reclutamiento' },
-      { name: 'panel-soporte', description: 'Crea el panel de soporte' },
-      { name: 'balance', description: 'Ver el balance de monedas', options: [{ name: 'usuario', description: 'Usuario del cual ver el balance', type: 6, required: false }] },
-      { name: 'daily', description: 'Reclamar tu bonus diario de 100 monedas' },
-      { name: 'leaderboard', description: 'Ver el top 10 de usuarios más ricos' },
-      { name: 'give', description: 'Regalar monedas a otro usuario', options: [{ name: 'usuario', description: 'Usuario al que enviar monedas', type: 6, required: true }, { name: 'cantidad', description: 'Cantidad de monedas a enviar', type: 4, required: true, min_value: 1 }] },
-      { name: 'add-coins', description: '💰 [STAFF] Agregar monedas a un usuario', options: [{ name: 'usuario', description: 'Usuario al que agregar monedas', type: 6, required: true }, { name: 'cantidad', description: 'Cantidad de monedas a agregar', type: 4, required: true, min_value: 1 }] },
-      { name: 'remove-coins', description: '💸 [STAFF] Quitar monedas a un usuario', options: [{ name: 'usuario', description: 'Usuario al que quitar monedas', type: 6, required: true }, { name: 'cantidad', description: 'Cantidad de monedas a quitar', type: 4, required: true, min_value: 1 }] },
-      { name: 'blackjack', description: '🃏 Juega Blackjack - Llega a 21 sin pasarte', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }] },
-      { name: 'coinflip', description: '🪙 Cara o Cruz - Duplica o pierde', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }, { name: 'eleccion', description: 'Elige cara o cruz', type: 3, required: true, choices: [{ name: 'Cara', value: 'cara' }, { name: 'Cruz', value: 'cruz' }] }] },
-      { name: 'dice', description: '🎲 Lanza 2 dados - Saca 12 para jackpot', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }] },
-      { name: 'roulette', description: '🎰 Ruleta de la fortuna', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }, { name: 'eleccion', description: 'Tu apuesta', type: 3, required: true, choices: [{ name: 'Rojo', value: 'rojo' }, { name: 'Negro', value: 'negro' }, { name: 'Verde (0)', value: '0' }] }] },
-      { name: 'rps', description: '✊ Piedra Papel o Tijera', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }, { name: 'eleccion', description: 'Tu jugada', type: 3, required: true, choices: [{ name: 'Piedra', value: 'piedra' }, { name: 'Papel', value: 'papel' }, { name: 'Tijera', value: 'tijera' }] }] },
-      { name: 'guess', description: '🔢 Adivina el número (1-100)', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }] },
-      { name: 'higher-lower', description: '📊 Higher or Lower - Racha de aciertos', options: [{ name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }] },
-      { name: 'duel', description: '⚔️ Retar a otro usuario a un duelo de monedas', options: [{ name: 'oponente', description: 'Usuario al que deseas retar', type: 6, required: true }, { name: 'apuesta', description: 'Cantidad de monedas a apostar', type: 4, required: true, min_value: 1 }] },
-      { name: 'shop', description: '🛒 Ver la tienda de items especiales' },
-      { name: 'buy', description: '💳 Comprar un item de la tienda', options: [{ name: 'item', description: 'ID del item a comprar', type: 3, required: true, choices: [{ name: '🍀 Amuleto de la Suerte (5000)', value: 'lucky_charm' }, { name: '🛡️ Escudo Protector (3000)', value: 'shield' }, { name: '💎 Multiplicador x2 (10000)', value: 'multiplier' }, { name: '⚡ Boost Diario (2000)', value: 'daily_boost' }, { name: '👑 Título VIP (15000)', value: 'vip_title' }] }] },
-      { name: 'inventory', description: '🎒 Ver tu inventario de items', options: [{ name: 'usuario', description: 'Usuario del cual ver el inventario', type: 6, required: false }] },
-      { name: 'respuesta', description: '📝 [STAFF] Enviar una respuesta rápida predefinida', options: [{ name: 'template', description: 'Selecciona el template de respuesta', type: 3, required: true, choices: [{ name: '👋 Bienvenida', value: 'bienvenida' }, { name: '🔍 En revisión', value: 'en_revision' }, { name: '📸 Necesita pruebas', value: 'necesita_pruebas' }, { name: '✅ Resuelto', value: 'resuelto' }, { name: '❌ Rechazado', value: 'rechazado' }, { name: '⏱️ En espera', value: 'espera' }, { name: '🔒 Cerrar ticket', value: 'cierre' }] }] }
-    ];
-    
-    await rest.put(
-      Routes.applicationGuildCommands(String(process.env.CLIENT_ID), String(process.env.GUILD_ID)),
-      { body: commands }
-    );
-    
-    console.log('✅ Comandos slash registrados exitosamente');
+    console.log('🔄 Ejecutando register.js para registrar comandos...');
+    const { execSync } = require('child_process');
+    execSync('node register.js', { stdio: 'inherit' });
+    console.log('✅ Comandos registrados');
   } catch (error) {
-    console.error('❌ Error registrando comandos:', error);
+    console.error('❌ Error registrando comandos:', error.message);
   }
   
   // Crear backup inicial
