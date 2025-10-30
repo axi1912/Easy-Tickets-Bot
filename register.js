@@ -301,13 +301,24 @@ const commands = [
   }
 ];
 
-const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 async function registerCommands() {
   try {
     console.log('Registrando comandos...');
+    
+    const clientId = process.env.CLIENT_ID;
+    const guildId = process.env.GUILD_ID;
+    
+    console.log('CLIENT_ID:', clientId);
+    console.log('GUILD_ID:', guildId);
+    
+    if (!clientId || !guildId) {
+      throw new Error('CLIENT_ID o GUILD_ID no están definidos');
+    }
+    
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(clientId, guildId),
       { body: commands }
     );
     console.log('✅ Comandos registrados');
