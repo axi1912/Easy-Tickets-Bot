@@ -1290,13 +1290,28 @@ client.on('interactionCreate', async interaction => {
     const job = jobsData.find(j => j.id === jobId);
     const newTasksCompleted = parseInt(tasksCompleted) + 1;
 
+    // Descripciones específicas por tarea
+    const taskDescs = {
+      programmer: ['💻 Revisar código del proyecto', '🔧 Arreglar bugs críticos', '🚀 Hacer deploy a producción'],
+      chef: ['🥘 Preparar ingredientes', '🍳 Cocinar el plato', '🍽️ Emplatar y decorar'],
+      driver: ['🚗 Revisar el vehículo', '🗺️ Planificar la ruta', '🏁 Completar el viaje'],
+      teacher: ['📚 Preparar la clase', '👨‍🏫 Enseñar a estudiantes', '📝 Calificar trabajos'],
+      doctor: ['🩺 Revisar pacientes', '💊 Recetar tratamientos', '📋 Actualizar historiales'],
+      streamer: ['🎥 Configurar stream', '🎮 Entretener viewers', '💬 Agradecer subs'],
+      ceo: ['📊 Revisar reportes', '👥 Reunión ejecutivos', '📈 Planificar crecimiento'],
+      athlete: ['🏃 Calentamiento', '⚽ Entrenamiento', '💪 Recuperación'],
+      actor: ['📖 Estudiar guión', '🎭 Grabar escenas', '🎬 Revisar tomas']
+    };
+      
+    const taskDesc = taskDescs[jobId] ? taskDescs[jobId][taskNum - 1] : `Tarea ${taskNum}`;
+
     if (newTasksCompleted < 3) {
       // Más tareas pendientes
       const nextTask = taskNum + 1;
       const taskButtons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`work_task${nextTask}_${userId}_${jobId}_${shift}_${correctBonus}_${newTasksCompleted}`)
-          .setLabel(`📋 Tarea ${nextTask}/3`)
+          .setLabel(`📋 Continuar - Tarea ${nextTask}/3`)
           .setStyle(ButtonStyle.Primary)
       );
 
@@ -1307,9 +1322,9 @@ client.on('interactionCreate', async interaction => {
       ].join('\n');
 
       const embed = new EmbedBuilder()
-        .setColor('#3498db')
-        .setTitle(`${job.emoji} ${job.name} - Tarea ${taskNum} Completada`)
-        .setDescription('¡Bien hecho! Continúa con la siguiente tarea.')
+        .setColor('#2ecc71')
+        .setTitle(`${job.emoji} ${job.name} - ✅ ${taskDesc}`)
+        .setDescription(`**Completado:** ${taskDesc}\n\n¡Excelente! Continúa con la siguiente tarea.`)
         .addFields({ name: '� Progreso', value: progressText, inline: false });
 
       await interaction.update({ embeds: [embed], components: [taskButtons] });
