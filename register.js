@@ -33,7 +33,7 @@ const commands = [
   },
   {
     name: 'work',
-    description: '💼 Trabajar para ganar monedas (cooldown: 1 hora)'
+    description: '💼 Sistema de trabajo completo con niveles, turnos y mini-juegos'
   },
   {
     name: 'bank',

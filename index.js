@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits, REST, Routes, StringSelectMenuBuilder } = require('discord.js');
 const fs = require('fs');
 require('dotenv').config();
 
@@ -95,6 +95,144 @@ function generateDailyQuests() {
   return shuffled.slice(0, 3).map((q, i) => ({ ...q, id: `quest_${i}` }));
 }
 
+// Sistema de trabajos - Datos de trabajos
+function getJobsData(workLevel) {
+  const baseJobs = [
+    {
+      id: 'programmer',
+      name: 'Programador',
+      emoji: '💻',
+      unlockLevel: 1,
+      questions: [
+        { q: '🐛 ¿Qué es un "null pointer exception"?', a: ['Variable sin valor asignado', 'Error de sintaxis', 'Problema de red'], correct: 0 },
+        { q: '📚 ¿Qué es un array?', a: ['Una lista de elementos', 'Un número', 'Una función'], correct: 0 },
+        { q: '🔄 ¿Qué hace un loop?', a: ['Repite código', 'Borra datos', 'Cierra programa'], correct: 0 },
+        { q: '⚡ ¿Qué lenguaje usa Node.js?', a: ['JavaScript', 'Python', 'Java'], correct: 0 },
+        { q: '🎯 ¿Qué es debugging?', a: ['Encontrar y arreglar errores', 'Escribir código', 'Borrar archivos'], correct: 0 }
+      ]
+    },
+    {
+      id: 'chef',
+      name: 'Chef',
+      emoji: '👨‍🍳',
+      unlockLevel: 1,
+      questions: [
+        { q: '🌡️ ¿A qué temperatura hierve el agua?', a: ['100°C', '50°C', '200°C'], correct: 0 },
+        { q: '🍳 ¿Cuál es el primer paso para hacer un huevo frito?', a: ['Calentar la sartén', 'Agregar sal', 'Batir el huevo'], correct: 0 },
+        { q: '🥖 ¿Qué ingrediente básico se usa para hacer pan?', a: ['Harina', 'Azúcar', 'Leche'], correct: 0 },
+        { q: '🔪 ¿Qué significa "picar finamente"?', a: ['Cortar en trozos pequeños', 'Cortar grueso', 'No cortar'], correct: 0 },
+        { q: '🍝 ¿Cuánto tiempo se cocina pasta al dente?', a: ['8-10 minutos', '30 minutos', '2 minutos'], correct: 0 }
+      ]
+    },
+    {
+      id: 'driver',
+      name: 'Conductor',
+      emoji: '🚗',
+      unlockLevel: 1,
+      questions: [
+        { q: '🚦 Semáforo en ámbar, ¿qué haces?', a: ['Frenar con precaución', 'Acelerar', 'Tocar bocina'], correct: 0 },
+        { q: '⛽ ¿Qué significa la luz de gasolina?', a: ['Tanque casi vacío', 'Motor caliente', 'Llantas bajas'], correct: 0 },
+        { q: '🛑 ¿Qué significa una señal octagonal roja?', a: ['Alto total', 'Ceda el paso', 'No estacionar'], correct: 0 },
+        { q: '🏎️ ¿Cuándo usas luces altas?', a: ['Carreteras oscuras sin tráfico', 'Siempre', 'En la ciudad'], correct: 0 },
+        { q: '🔧 ¿Cada cuánto cambiar aceite del motor?', a: ['5,000-10,000 km', '50,000 km', '1,000 km'], correct: 0 }
+      ]
+    },
+    {
+      id: 'teacher',
+      name: 'Profesor',
+      emoji: '👨‍🏫',
+      unlockLevel: 1,
+      questions: [
+        { q: '🌍 ¿Cuál es la capital de Francia?', a: ['París', 'Londres', 'Madrid'], correct: 0 },
+        { q: '🔢 ¿Cuánto es 15 x 8?', a: ['120', '100', '150'], correct: 0 },
+        { q: '📖 ¿Quién escribió Don Quijote?', a: ['Miguel de Cervantes', 'Shakespeare', 'Dante'], correct: 0 },
+        { q: '🌊 ¿Cuál es el océano más grande?', a: ['Pacífico', 'Atlántico', 'Índico'], correct: 0 },
+        { q: '🔬 ¿Qué es H2O?', a: ['Agua', 'Oxígeno', 'Hidrógeno'], correct: 0 }
+      ]
+    },
+    {
+      id: 'doctor',
+      name: 'Médico',
+      emoji: '👨‍⚕️',
+      unlockLevel: 1,
+      questions: [
+        { q: '🩺 Paciente: fiebre, tos, dolor de cabeza', a: ['Gripe', 'Alergia', 'Insolación'], correct: 0 },
+        { q: '💊 ¿Para qué sirve el paracetamol?', a: ['Bajar fiebre y dolor', 'Dormir', 'Vitamina'], correct: 0 },
+        { q: '❤️ ¿Cuántas veces late el corazón por minuto?', a: ['60-100', '20-30', '200-300'], correct: 0 },
+        { q: '🏥 ¿Qué es un estetoscopio?', a: ['Escuchar corazón/pulmones', 'Medir presión', 'Ver garganta'], correct: 0 },
+        { q: '🩹 ¿Qué haces con una herida que sangra?', a: ['Presionar con gasa', 'Ignorarla', 'Echar alcohol'], correct: 0 }
+      ]
+    },
+    {
+      id: 'streamer',
+      name: 'Streamer',
+      emoji: '🎮',
+      unlockLevel: 1,
+      questions: [
+        { q: '📹 ¿Qué plataforma es para streaming?', a: ['Twitch', 'WhatsApp', 'Gmail'], correct: 0 },
+        { q: '🎤 ¿Qué necesitas para hablar en stream?', a: ['Micrófono', 'Impresora', 'Scanner'], correct: 0 },
+        { q: '💬 ¿Cómo se llaman los espectadores?', a: ['Viewers', 'Players', 'Editors'], correct: 0 },
+        { q: '⚡ ¿Qué internet necesitas para streamear?', a: ['Rápido y estable', 'Lento', 'Solo WiFi'], correct: 0 },
+        { q: '🎁 ¿Qué son las subs?', a: ['Suscripciones pagadas', 'Puntos gratis', 'Emojis'], correct: 0 }
+      ]
+    }
+  ];
+
+  const premiumJobs = [
+    {
+      id: 'ceo',
+      name: 'CEO',
+      emoji: '💼',
+      unlockLevel: 10,
+      questions: [
+        { q: '📊 ¿Qué es un balance general?', a: ['Estado financiero', 'Lista de empleados', 'Inventario'], correct: 0 },
+        { q: '💰 ¿Qué es ROI?', a: ['Retorno de inversión', 'Riesgo operativo', 'Registro oficial'], correct: 0 },
+        { q: '👥 ¿Qué hace un CEO?', a: ['Dirige la empresa', 'Limpia oficinas', 'Contesta teléfonos'], correct: 0 }
+      ]
+    },
+    {
+      id: 'athlete',
+      name: 'Deportista Pro',
+      emoji: '⚽',
+      unlockLevel: 12,
+      questions: [
+        { q: '🏃 ¿Cuántos minutos tiene un partido de fútbol?', a: ['90 minutos', '60 minutos', '120 minutos'], correct: 0 },
+        { q: '💪 ¿Qué es importante antes de entrenar?', a: ['Calentar', 'Dormir', 'Comer mucho'], correct: 0 },
+        { q: '🥇 ¿Cada cuántos años son las Olimpiadas?', a: ['4 años', '2 años', '5 años'], correct: 0 }
+      ]
+    },
+    {
+      id: 'actor',
+      name: 'Actor',
+      emoji: '🎬',
+      unlockLevel: 15,
+      questions: [
+        { q: '🎭 ¿Qué es un guión?', a: ['Diálogos y acciones', 'Vestuario', 'Escenario'], correct: 0 },
+        { q: '🎥 ¿Qué grita el director al empezar?', a: ['¡Acción!', '¡Silencio!', '¡Corten!'], correct: 0 },
+        { q: '🏆 ¿Cuál es el premio más famoso del cine?', a: ['Oscar', 'Grammy', 'Emmy'], correct: 0 }
+      ]
+    }
+  ];
+
+  return [...baseJobs, ...premiumJobs.filter(job => workLevel >= job.unlockLevel)];
+}
+
+// Calcular XP necesario para siguiente nivel
+function getXPForLevel(level) {
+  return level * 200; // Nivel 1 = 200 XP, Nivel 2 = 400 XP, etc.
+}
+
+// Calcular pago base según nivel y turno
+function calculatePay(baseMin, baseMax, workLevel, shift) {
+  const levelBonus = 1 + (workLevel - 1) * 0.15; // +15% por nivel
+  const shiftMultiplier = { '2h': 1, '4h': 2.2, '8h': 4.5 }[shift];
+  
+  const min = Math.floor(baseMin * levelBonus * shiftMultiplier);
+  const max = Math.floor(baseMax * levelBonus * shiftMultiplier);
+  
+  return { min, max };
+}
+
 // Obtener o crear usuario de economía
 function getUser(userId) {
   const economy = loadEconomy();
@@ -111,6 +249,10 @@ function getUser(userId) {
       quests: [],
       inventory: [],
       titles: [],
+      workLevel: 1,
+      workXP: 0,
+      workStreak: 0,
+      lastWorkDate: null,
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -130,6 +272,10 @@ function getUser(userId) {
   if (economy[userId].streak === undefined) economy[userId].streak = 0;
   if (economy[userId].loan === undefined) economy[userId].loan = null;
   if (economy[userId].quests === undefined) economy[userId].quests = [];
+  if (economy[userId].workLevel === undefined) economy[userId].workLevel = 1;
+  if (economy[userId].workXP === undefined) economy[userId].workXP = 0;
+  if (economy[userId].workStreak === undefined) economy[userId].workStreak = 0;
+  if (economy[userId].lastWorkDate === undefined) economy[userId].lastWorkDate = null;
   
   return economy[userId];
 }
@@ -954,48 +1100,311 @@ client.on('interactionCreate', async interaction => {
   }
 
   // WORK - Trabajar para ganar monedas
+  // ========== SISTEMA DE TRABAJO COMPLETO ==========
   if (interaction.isChatInputCommand() && interaction.commandName === 'work') {
     const userData = getUser(interaction.user.id);
     const now = Date.now();
-    const cooldown = 3600000; // 1 hora en ms
 
-    if (userData.lastWork && (now - userData.lastWork) < cooldown) {
-      const timeLeft = cooldown - (now - userData.lastWork);
-      const minutes = Math.floor(timeLeft / 60000);
+    // Verificar cooldown
+    if (userData.lastWork && (now - userData.lastWork) < 7200000) { // 2 horas mínimo
+      const timeLeft = Math.ceil((7200000 - (now - userData.lastWork)) / 60000);
+      const hours = Math.floor(timeLeft / 60);
+      const mins = timeLeft % 60;
       return interaction.reply({ 
-        content: `⏰ Ya has trabajado recientemente. Puedes trabajar de nuevo en **${minutes}** minutos.`, 
+        content: `⏰ Ya has trabajado recientemente. Próximo trabajo disponible en **${hours}h ${mins}m**`, 
         flags: 64 
       });
     }
 
-    const jobs = [
-      { name: 'Programador', emoji: '💻', min: 100, max: 250 },
-      { name: 'Chef', emoji: '👨‍🍳', min: 80, max: 180 },
-      { name: 'Conductor', emoji: '🚗', min: 70, max: 150 },
-      { name: 'Profesor', emoji: '👨‍🏫', min: 90, max: 200 },
-      { name: 'Médico', emoji: '👨‍⚕️', min: 120, max: 280 },
-      { name: 'Streamer', emoji: '🎮', min: 50, max: 300 }
-    ];
+    // Calcular racha de trabajo
+    const lastDate = userData.lastWorkDate ? new Date(userData.lastWorkDate).toDateString() : null;
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    
+    if (lastDate === yesterday) {
+      userData.workStreak += 1;
+    } else if (lastDate !== today) {
+      userData.workStreak = 1;
+    }
 
-    const job = jobs[Math.floor(Math.random() * jobs.length)];
-    const earned = Math.floor(Math.random() * (job.max - job.min + 1)) + job.min;
+    // Obtener trabajos disponibles
+    const availableJobs = getJobsData(userData.workLevel);
+    const xpNeeded = getXPForLevel(userData.workLevel);
+    const xpProgress = Math.floor((userData.workXP / xpNeeded) * 100);
 
-    userData.coins += earned;
-    userData.lastWork = now;
-    updateUser(interaction.user.id, userData);
+    // Crear menú de selección de trabajo
+    const jobOptions = availableJobs.map(job => ({
+      label: `${job.emoji} ${job.name}${job.unlockLevel > 1 ? ` (Nivel ${job.unlockLevel})` : ''}`,
+      description: `Nivel requerido: ${job.unlockLevel}`,
+      value: job.id
+    }));
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`work_select_${interaction.user.id}`)
+      .setPlaceholder('Selecciona tu trabajo')
+      .addOptions(jobOptions);
 
     const embed = new EmbedBuilder()
-      .setColor('#2ecc71')
-      .setTitle(`${job.emoji} ¡Trabajo Completado!`)
-      .setDescription(`Has trabajado como **${job.name}** y ganaste **${earned.toLocaleString()}** 🪙`)
+      .setColor('#3498db')
+      .setTitle('💼 Sistema de Trabajo')
+      .setDescription(`**${interaction.user.username}**, elige tu trabajo para hoy`)
       .addFields(
-        { name: '💰 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
-        { name: '⏰ Próximo trabajo', value: 'En 1 hora', inline: true }
+        { name: '📊 Tu Nivel', value: `Nivel ${userData.workLevel} (${userData.workXP}/${xpNeeded} XP - ${xpProgress}%)`, inline: true },
+        { name: '🔥 Racha', value: `${userData.workStreak} días consecutivos`, inline: true },
+        { name: '💰 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '📝 Cómo funciona', value: '1. Elige trabajo\n2. Selecciona turno (2h/4h/8h)\n3. Completa mini-juego\n4. Elige calidad\n5. Recibe pago + XP', inline: false }
       )
-      .setFooter({ text: '💡 Tip: Trabaja cada hora para maximizar tus ganancias' })
+      .setFooter({ text: '💡 Trabajos premium se desbloquean al subir de nivel' });
+
+    await interaction.reply({ 
+      embeds: [embed], 
+      components: [new ActionRowBuilder().addComponents(selectMenu)],
+      flags: 64 
+    });
+  }
+
+  // Selección de trabajo
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('work_select_')) {
+    const userId = interaction.customId.split('_')[2];
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este menú no es para ti.', flags: 64 });
+    }
+
+    const jobId = interaction.values[0];
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const selectedJob = jobsData.find(j => j.id === jobId);
+
+    // Crear botones de turno
+    const shiftButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`work_shift_${userId}_${jobId}_2h`)
+        .setLabel('🕐 Turno 2h')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`work_shift_${userId}_${jobId}_4h`)
+        .setLabel('🕓 Turno 4h')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`work_shift_${userId}_${jobId}_8h`)
+        .setLabel('🕗 Turno 8h')
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const pay2h = calculatePay(80, 150, userData.workLevel, '2h');
+    const pay4h = calculatePay(80, 150, userData.workLevel, '4h');
+    const pay8h = calculatePay(80, 150, userData.workLevel, '8h');
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle(`${selectedJob.emoji} ${selectedJob.name}`)
+      .setDescription(`Selecciona la duración de tu turno:`)
+      .addFields(
+        { name: '� Turno 2 horas', value: `💰 ${pay2h.min}-${pay2h.max} 🪙 + 10 XP\n⏰ Cooldown: 2 horas`, inline: true },
+        { name: '🕓 Turno 4 horas', value: `💰 ${pay4h.min}-${pay4h.max} 🪙 + 25 XP\n⏰ Cooldown: 4 horas`, inline: true },
+        { name: '🕗 Turno 8 horas', value: `💰 ${pay8h.min}-${pay8h.max} 🪙 + 50 XP\n⏰ Cooldown: 8 horas`, inline: true }
+      )
+      .setFooter({ text: 'Turnos más largos = más pago pero mayor cooldown' });
+
+    await interaction.update({ embeds: [embed], components: [shiftButtons] });
+  }
+
+  // Selección de turno -> Mini-juego
+  if (interaction.isButton() && interaction.customId.startsWith('work_shift_')) {
+    const [, , userId, jobId, shift] = interaction.customId.split('_');
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+    
+    // Seleccionar pregunta aleatoria
+    const question = job.questions[Math.floor(Math.random() * job.questions.length)];
+    
+    // Crear botones de respuestas
+    const answerButtons = new ActionRowBuilder().addComponents(
+      ...question.a.map((answer, idx) => 
+        new ButtonBuilder()
+          .setCustomId(`work_answer_${userId}_${jobId}_${shift}_${idx}_${question.correct}`)
+          .setLabel(answer)
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle(`${job.emoji} ${job.name} - Pregunta`)
+      .setDescription(question.q)
+      .setFooter({ text: 'Responde correctamente para maximizar tu pago' });
+
+    await interaction.update({ embeds: [embed], components: [answerButtons] });
+  }
+
+  // Respuesta del mini-juego -> Tareas
+  if (interaction.isButton() && interaction.customId.startsWith('work_answer_')) {
+    const [, , userId, jobId, shift, selectedAnswer, correctAnswer] = interaction.customId.split('_');
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
+    }
+
+    const isCorrect = parseInt(selectedAnswer) === parseInt(correctAnswer);
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+
+    // Crear tareas progresivas
+    const taskButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`work_task1_${userId}_${jobId}_${shift}_${isCorrect ? 1 : 0}_0`)
+        .setLabel('� Tarea 1/3')
+        .setStyle(ButtonStyle.Primary)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor(isCorrect ? '#2ecc71' : '#e67e22')
+      .setTitle(`${job.emoji} ${job.name} - ${isCorrect ? '✅ ¡Correcto!' : '⚠️ Respuesta incorrecta'}`)
+      .setDescription(isCorrect 
+        ? '¡Excelente! Ahora completa tus tareas del turno.'
+        : 'No pasa nada, aún recibirás un pago base. Completa tus tareas.')
+      .addFields(
+        { name: '📝 Progreso', value: '⏳ Iniciar primera tarea\n🔒 Tarea 2 (Bloqueada)\n🔒 Tarea 3 (Bloqueada)', inline: false }
+      );
+
+    await interaction.update({ embeds: [embed], components: [taskButtons] });
+  }
+
+  // Tareas progresivas (1/3, 2/3, 3/3)
+  if (interaction.isButton() && interaction.customId.startsWith('work_task')) {
+    const parts = interaction.customId.split('_');
+    const taskNum = parseInt(parts[0].replace('work_task', ''));
+    const [, userId, jobId, shift, correctBonus, tasksCompleted] = parts.slice(1);
+    
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+    const newTasksCompleted = parseInt(tasksCompleted) + 1;
+
+    if (newTasksCompleted < 3) {
+      // Más tareas pendientes
+      const nextTask = taskNum + 1;
+      const taskButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_task${nextTask}_${userId}_${jobId}_${shift}_${correctBonus}_${newTasksCompleted}`)
+          .setLabel(`📋 Tarea ${nextTask}/3`)
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const progressText = [
+        newTasksCompleted >= 1 ? '✅ Tarea 1 completada' : '⏳ Tarea 1',
+        newTasksCompleted >= 2 ? '✅ Tarea 2 completada' : newTasksCompleted === 1 ? '⏳ Iniciar tarea 2' : '🔒 Tarea 2 (Bloqueada)',
+        newTasksCompleted >= 3 ? '✅ Tarea 3 completada' : '🔒 Tarea 3 (Bloqueada)'
+      ].join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor('#3498db')
+        .setTitle(`${job.emoji} ${job.name} - Tarea ${taskNum} Completada`)
+        .setDescription('¡Bien hecho! Continúa con la siguiente tarea.')
+        .addFields({ name: '� Progreso', value: progressText, inline: false });
+
+      await interaction.update({ embeds: [embed], components: [taskButtons] });
+    } else {
+      // Todas las tareas completadas -> Elegir calidad
+      const qualityButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${correctBonus}_fast`)
+          .setLabel('⚡ Trabajo Rápido')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${correctBonus}_perfect`)
+          .setLabel('⭐ Trabajo Perfecto')
+          .setStyle(ButtonStyle.Success)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle(`${job.emoji} ${job.name} - ✅ Todas las Tareas Completadas`)
+        .setDescription('¡Excelente trabajo! Ahora elige la calidad:')
+        .addFields(
+          { name: '⚡ Trabajo Rápido', value: '• 90% del pago\n• Cooldown reducido (-30 min)\n• +10 XP bonus', inline: true },
+          { name: '⭐ Trabajo Perfecto', value: '• 120% del pago\n• Cooldown normal\n• +25 XP bonus', inline: true }
+        )
+        .setFooter({ text: 'Elige según tu estrategia' });
+
+      await interaction.update({ embeds: [embed], components: [qualityButtons] });
+    }
+  }
+
+  // Elección de calidad -> Pago final
+  if (interaction.isButton() && interaction.customId.startsWith('work_quality_')) {
+    const [, , userId, jobId, shift, correctBonus, quality] = interaction.customId.split('_');
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+    
+    // Calcular pago
+    const basePay = calculatePay(80, 150, userData.workLevel, shift);
+    const randomPay = Math.floor(Math.random() * (basePay.max - basePay.min + 1)) + basePay.min;
+    
+    const qualityMultiplier = quality === 'fast' ? 0.9 : 1.2;
+    const correctMultiplier = parseInt(correctBonus) ? 1.15 : 1;
+    const streakMultiplier = userData.workStreak >= 7 ? 1.25 : userData.workStreak >= 3 ? 1.10 : 1;
+    
+    const finalPay = Math.floor(randomPay * qualityMultiplier * correctMultiplier * streakMultiplier);
+    
+    // Calcular XP
+    const baseXP = { '2h': 10, '4h': 25, '8h': 50 }[shift];
+    const qualityXP = quality === 'fast' ? 10 : 25;
+    const totalXP = baseXP + qualityXP;
+    
+    // Calcular cooldown
+    const baseCooldown = { '2h': 2, '4h': 4, '8h': 8 }[shift];
+    const cooldownHours = quality === 'fast' ? baseCooldown - 0.5 : baseCooldown;
+    const cooldownMs = cooldownHours * 3600000;
+    
+    // Actualizar usuario
+    userData.coins += finalPay;
+    userData.workXP += totalXP;
+    userData.lastWork = Date.now();
+    userData.lastWorkDate = new Date().toISOString();
+    
+    // Verificar nivel
+    const xpNeeded = getXPForLevel(userData.workLevel);
+    let leveledUp = false;
+    if (userData.workXP >= xpNeeded) {
+      userData.workLevel += 1;
+      userData.workXP = 0;
+      leveledUp = true;
+    }
+    
+    updateUser(interaction.user.id, userData);
+
+    // Embed de resultado
+    const embed = new EmbedBuilder()
+      .setColor('#f1c40f')
+      .setTitle(`${job.emoji} ${job.name} - 🎉 ¡Turno Completado!`)
+      .setDescription(leveledUp ? `🎊 **¡SUBISTE DE NIVEL!** Ahora eres Nivel ${userData.workLevel}` : `¡Excelente trabajo ${interaction.user.username}!`)
+      .addFields(
+        { name: '💰 Ganancia Total', value: `${finalPay.toLocaleString()} 🪙`, inline: true },
+        { name: '⭐ XP Ganado', value: `+${totalXP} XP`, inline: true },
+        { name: '� Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '📊 Desglose', value: `Pago base: ${randomPay}🪙\n${quality === 'perfect' ? 'Calidad +20%' : 'Rápido -10%'}\n${parseInt(correctBonus) ? 'Respuesta correcta +15%' : ''}\n${streakMultiplier > 1 ? `Racha ${userData.workStreak} días +${Math.floor((streakMultiplier - 1) * 100)}%` : ''}`, inline: false },
+        { name: '⏰ Próximo trabajo', value: `En ${cooldownHours} horas`, inline: true },
+        { name: '📈 Progreso', value: `Nivel ${userData.workLevel} (${userData.workXP}/${getXPForLevel(userData.workLevel)} XP)`, inline: true }
+      )
+      .setFooter({ text: `� Racha: ${userData.workStreak} días | Trabaja diario para mantenerla` })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.update({ embeds: [embed], components: [] });
   }
 
   // BANK - Sistema bancario
