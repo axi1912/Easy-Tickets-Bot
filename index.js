@@ -1158,8 +1158,7 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.reply({ 
       embeds: [embed], 
-      components: [new ActionRowBuilder().addComponents(selectMenu)],
-      flags: 64 
+      components: [new ActionRowBuilder().addComponents(selectMenu)]
     });
   }
 
@@ -1275,8 +1274,8 @@ client.on('interactionCreate', async interaction => {
     await interaction.update({ embeds: [embed], components: [taskButtons] });
   }
 
-  // Tareas progresivas (1/3, 2/3, 3/3)
-  if (interaction.isButton() && interaction.customId.startsWith('work_task')) {
+  // Tareas progresivas - Mostrar pregunta de cada tarea
+  if (interaction.isButton() && interaction.customId.startsWith('work_task') && !interaction.customId.includes('taskanswer')) {
     const parts = interaction.customId.split('_');
     const taskNum = parseInt(parts[0].replace('work_task', ''));
     const [, userId, jobId, shift, correctBonus, tasksCompleted] = parts.slice(1);
@@ -1304,6 +1303,77 @@ client.on('interactionCreate', async interaction => {
     };
       
     const taskDesc = taskDescs[jobId] ? taskDescs[jobId][taskNum - 1] : `Tarea ${taskNum}`;
+
+    // Preguntas para cada tarea
+    const taskQuestions = {
+      programmer: [
+        { q: '💻 ¿Qué herramienta usas para versionar código?', a: ['Git', 'Photoshop', 'Excel'], correct: 0 },
+        { q: '🔧 ¿Cómo debugueas efectivamente?', a: ['Console.log y breakpoints', 'Ignorar errores', 'Reiniciar'], correct: 0 },
+        { q: '🚀 ¿Qué comando despliega cambios?', a: ['git push', 'git delete', 'git stop'], correct: 0 }
+      ],
+      chef: [
+        { q: '🥘 ¿Con qué cortas verduras?', a: ['Cuchillo afilado', 'Tenedor', 'Cuchara'], correct: 0 },
+        { q: '🍳 ¿Temperatura para cocinar carne?', a: ['Medio-alto', 'Frío', 'Sin calor'], correct: 0 },
+        { q: '🍽️ ¿Qué va primero en el plato?', a: ['Plato principal', 'Postre', 'Bebida'], correct: 0 }
+      ],
+      driver: [
+        { q: '🚗 ¿Presión correcta de llantas?', a: ['30-35 PSI', '100 PSI', '5 PSI'], correct: 0 },
+        { q: '🗺️ ¿Mejor app para navegar?', a: ['Google Maps', 'Instagram', 'TikTok'], correct: 0 },
+        { q: '🏁 ¿Cómo asegurar la carga?', a: ['Con correas', 'Sin amarrar', 'Con cinta'], correct: 0 }
+      ],
+      teacher: [
+        { q: '📚 ¿Cómo hacer clase interesante?', a: ['Con ejemplos prácticos', 'Solo leyendo', 'Callado'], correct: 0 },
+        { q: '👨‍🏫 ¿Qué hacer si no entienden?', a: ['Explicar diferente', 'Ignorar', 'Regañar'], correct: 0 },
+        { q: '📝 ¿Cómo calificar justamente?', a: ['Con rúbrica', 'Al azar', 'Todos 10'], correct: 0 }
+      ],
+      doctor: [
+        { q: '🩺 ¿Qué revisar primero?', a: ['Signos vitales', 'Zapatos', 'Teléfono'], correct: 0 },
+        { q: '💊 ¿Cuándo dar antibióticos?', a: ['Infección bacterial', 'Siempre', 'Nunca'], correct: 0 },
+        { q: '📋 ¿Por qué documentar?', a: ['Seguimiento médico', 'Perder tiempo', 'Por gusto'], correct: 0 }
+      ],
+      streamer: [
+        { q: '🎥 ¿Mejor calidad de video?', a: ['1080p o superior', '240p', '10p'], correct: 0 },
+        { q: '🎮 ¿Cómo mantener viewers?', a: ['Interactuando', 'Ignorando', 'Callado'], correct: 0 },
+        { q: '💬 ¿Qué decir al recibir sub?', a: ['Gracias con emoción', 'Nada', 'Quejarte'], correct: 0 }
+      ],
+      ceo: [
+        { q: '📊 ¿Indicador más importante?', a: ['Rentabilidad', 'Color oficina', 'Café'], correct: 0 },
+        { q: '👥 ¿Cómo decidir bien?', a: ['Con datos', 'Al azar', 'Emoción'], correct: 0 },
+        { q: '📈 ¿Qué buscar al crecer?', a: ['Sostenibilidad', 'Gastar', 'Nada'], correct: 0 }
+      ],
+      athlete: [
+        { q: '🏃 ¿Por qué calentar?', a: ['Evitar lesiones', 'Perder tiempo', 'Moda'], correct: 0 },
+        { q: '⚽ ¿Qué comer antes?', a: ['Carbohidratos', 'Comida pesada', 'Nada'], correct: 0 },
+        { q: '💪 ¿Qué hacer después?', a: ['Estirar', 'Sentarte', 'Dormir'], correct: 0 }
+      ],
+      actor: [
+        { q: '📖 ¿Cómo memorizar líneas?', a: ['Repetir en voz alta', 'No leer', 'Olvidar'], correct: 0 },
+        { q: '🎭 ¿Qué hacer en escena emotiva?', a: ['Conectar con personaje', 'Reír', 'Salir'], correct: 0 },
+        { q: '🎬 ¿Cómo mejorar?', a: ['Viendo tomas', 'Sin revisar', 'Ignorando'], correct: 0 }
+      ]
+    };
+
+    const taskQ = taskQuestions[jobId] ? taskQuestions[jobId][taskNum - 1] : null;
+
+    // Mostrar pregunta de esta tarea
+    if (taskQ) {
+      const answerButtons = new ActionRowBuilder().addComponents(
+        ...taskQ.a.map((answer, idx) => 
+          new ButtonBuilder()
+            .setCustomId(`work_taskanswer_${userId}_${jobId}_${shift}_${correctBonus}_${tasksCompleted}_${taskNum}_${idx}_${taskQ.correct}`)
+            .setLabel(answer)
+            .setStyle(ButtonStyle.Secondary)
+        )
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#9b59b6')
+        .setTitle(`${job.emoji} ${job.name} - ${taskDesc}`)
+        .setDescription(taskQ.q)
+        .setFooter({ text: `Tarea ${taskNum}/3 | Responde para continuar` });
+
+      return await interaction.update({ embeds: [embed], components: [answerButtons] });
+    }
 
     if (newTasksCompleted < 3) {
       // Más tareas pendientes
@@ -1355,6 +1425,73 @@ client.on('interactionCreate', async interaction => {
     }
   }
 
+  // Respuesta de pregunta de tarea
+  if (interaction.isButton() && interaction.customId.startsWith('work_taskanswer_')) {
+    const [, , userId, jobId, shift, correctBonus, tasksCompleted, taskNum, selectedAnswer, correctAnswer] = interaction.customId.split('_');
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+    const newTasksCompleted = parseInt(tasksCompleted) + 1;
+    const isCorrect = parseInt(selectedAnswer) === parseInt(correctAnswer);
+    const newCorrectBonus = parseInt(correctBonus) + (isCorrect ? 1 : 0);
+
+    if (newTasksCompleted < 3) {
+      // Más tareas pendientes
+      const nextTask = parseInt(taskNum) + 1;
+      const taskButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_task${nextTask}_${userId}_${jobId}_${shift}_${newCorrectBonus}_${newTasksCompleted}`)
+          .setLabel(`📋 Siguiente - Tarea ${nextTask}/3`)
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const progressText = [
+        newTasksCompleted >= 1 ? '✅ Tarea 1 completada' : '⏳ Tarea 1',
+        newTasksCompleted >= 2 ? '✅ Tarea 2 completada' : newTasksCompleted === 1 ? '⏳ Iniciar tarea 2' : '🔒 Tarea 2 (Bloqueada)',
+        newTasksCompleted >= 3 ? '✅ Tarea 3 completada' : '🔒 Tarea 3 (Bloqueada)'
+      ].join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(isCorrect ? '#2ecc71' : '#f39c12')
+        .setTitle(`${job.emoji} ${job.name} - ${isCorrect ? '✅ ¡Correcto!' : '⚠️ Incorrecto'}`)
+        .setDescription(isCorrect 
+          ? `¡Excelente! Tarea ${taskNum} completada correctamente. Bonus acumulado.`
+          : `Tarea ${taskNum} completada. La respuesta no fue correcta, pero sigues avanzando.`)
+        .addFields({ name: '📝 Progreso', value: progressText, inline: false })
+        .setFooter({ text: `Respuestas correctas: ${newCorrectBonus}/4 | Más respuestas = más pago` });
+
+      await interaction.update({ embeds: [embed], components: [taskButtons] });
+    } else {
+      // Todas las tareas completadas -> Elegir calidad
+      const qualityButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${newCorrectBonus}_fast`)
+          .setLabel('⚡ Trabajo Rápido')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${newCorrectBonus}_perfect`)
+          .setLabel('⭐ Trabajo Perfecto')
+          .setStyle(ButtonStyle.Success)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle(`${job.emoji} ${job.name} - ✅ Todas las Tareas Completadas`)
+        .setDescription(`¡Excelente trabajo! Completaste las 3 tareas.\n\n**Respuestas correctas:** ${newCorrectBonus}/4\n\nAhora elige la calidad de tu trabajo:`)
+        .addFields(
+          { name: '⚡ Trabajo Rápido', value: '• 90% del pago\n• Cooldown -30 min\n• +10 XP bonus', inline: true },
+          { name: '⭐ Trabajo Perfecto', value: '• 120% del pago\n• Cooldown normal\n• +25 XP bonus', inline: true }
+        )
+        .setFooter({ text: 'Elige según tu estrategia' });
+
+      await interaction.update({ embeds: [embed], components: [qualityButtons] });
+    }
+  }
+
   // Elección de calidad -> Pago final
   if (interaction.isButton() && interaction.customId.startsWith('work_quality_')) {
     const [, , userId, jobId, shift, correctBonus, quality] = interaction.customId.split('_');
@@ -1371,7 +1508,9 @@ client.on('interactionCreate', async interaction => {
     const randomPay = Math.floor(Math.random() * (basePay.max - basePay.min + 1)) + basePay.min;
     
     const qualityMultiplier = quality === 'fast' ? 0.9 : 1.2;
-    const correctMultiplier = parseInt(correctBonus) ? 1.15 : 1;
+    // Multiplicador por respuestas correctas: 0/4=1x, 1/4=1.05x, 2/4=1.10x, 3/4=1.15x, 4/4=1.25x
+    const correctCount = parseInt(correctBonus);
+    const correctMultiplier = 1 + (correctCount * 0.05) + (correctCount === 4 ? 0.05 : 0);
     const streakMultiplier = userData.workStreak >= 7 ? 1.25 : userData.workStreak >= 3 ? 1.10 : 1;
     
     const finalPay = Math.floor(randomPay * qualityMultiplier * correctMultiplier * streakMultiplier);
@@ -1412,7 +1551,7 @@ client.on('interactionCreate', async interaction => {
         { name: '💰 Ganancia Total', value: `${finalPay.toLocaleString()} 🪙`, inline: true },
         { name: '⭐ XP Ganado', value: `+${totalXP} XP`, inline: true },
         { name: '� Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
-        { name: '📊 Desglose', value: `Pago base: ${randomPay}🪙\n${quality === 'perfect' ? 'Calidad +20%' : 'Rápido -10%'}\n${parseInt(correctBonus) ? 'Respuesta correcta +15%' : ''}\n${streakMultiplier > 1 ? `Racha ${userData.workStreak} días +${Math.floor((streakMultiplier - 1) * 100)}%` : ''}`, inline: false },
+        { name: '📊 Desglose', value: `Pago base: ${randomPay}🪙\n${quality === 'perfect' ? 'Calidad perfecta +20%' : 'Trabajo rápido -10%'}\nRespuestas correctas (${correctCount}/4): +${Math.floor((correctMultiplier - 1) * 100)}%\n${streakMultiplier > 1 ? `Racha ${userData.workStreak} días: +${Math.floor((streakMultiplier - 1) * 100)}%` : ''}`, inline: false },
         { name: '⏰ Próximo trabajo', value: `En ${cooldownHours} horas`, inline: true },
         { name: '📈 Progreso', value: `Nivel ${userData.workLevel} (${userData.workXP}/${getXPForLevel(userData.workLevel)} XP)`, inline: true }
       )
