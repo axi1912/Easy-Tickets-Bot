@@ -1277,11 +1277,12 @@ client.on('interactionCreate', async interaction => {
   // Tareas progresivas - Mostrar pregunta de cada tarea
   if (interaction.isButton() && interaction.customId.startsWith('work_task') && !interaction.customId.includes('taskanswer')) {
     const parts = interaction.customId.split('_');
-    const taskNum = parseInt(parts[0].replace('work_task', ''));
-    const [, userId, jobId, shift, correctBonus, tasksCompleted] = parts.slice(1);
+    // parts = ['work', 'task1', userId, jobId, shift, correctBonus, tasksCompleted]
+    const taskNum = parseInt(parts[1].replace('task', ''));
+    const [, , userId, jobId, shift, correctBonus, tasksCompleted] = parts;
     
     console.log(`🔍 Tarea presionada: ${interaction.customId}`);
-    console.log(`📋 TaskNum: ${taskNum}, JobId: ${jobId}`);
+    console.log(`📋 TaskNum: ${taskNum}, JobId: ${jobId}, Parts:`, parts);
     
     if (interaction.user.id !== userId) {
       return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
