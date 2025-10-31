@@ -272,6 +272,14 @@ function getUser(userId) {
         lastDungeon: 0,
         bossesDefeated: 0
       },
+      social: {
+        partner: null,
+        marriageDate: null,
+        clan: null,
+        reputation: 0,
+        repsGiven: [],
+        lastRepDate: 0
+      },
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -314,6 +322,16 @@ function getUser(userId) {
       inventory: [],
       lastDungeon: 0,
       bossesDefeated: 0
+    };
+  }
+  if (economy[userId].social === undefined) {
+    economy[userId].social = {
+      partner: null,
+      marriageDate: null,
+      clan: null,
+      reputation: 0,
+      repsGiven: [],
+      lastRepDate: 0
     };
   }
   
@@ -5351,6 +5369,577 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.channel.send({ embeds: [embed] });
+  }
+
+  // ========== FASE 4: SISTEMA SOCIAL ==========
+  
+  // Sistema de clanes (almacenado en memoria)
+  const CLANS_FILE = './clans.json';
+  
+  function loadClans() {
+    if (!fs.existsSync(CLANS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(CLANS_FILE, 'utf8'));
+  }
+
+  function saveClans(clans) {
+    fs.writeFileSync(CLANS_FILE, JSON.stringify(clans, null, 2));
+  }
+
+  // CASARSE
+  if (interaction.isChatInputCommand() && interaction.commandName === 'casarse') {
+    const partner = interaction.options.getUser('pareja');
+    const userData = getUser(interaction.user.id);
+    const partnerData = getUser(partner.id);
+
+    if (partner.id === interaction.user.id) {
+      return interaction.reply({ content: '❌ No puedes casarte contigo mismo.', flags: 64 });
+    }
+
+    if (partner.bot) {
+      return interaction.reply({ content: '❌ No puedes casarte con un bot.', flags: 64 });
+    }
+
+    if (userData.social.partner) {
+      return interaction.reply({ content: '❌ Ya estás casado/a. Usa `/divorcio` primero.', flags: 64 });
+    }
+
+    if (partnerData.social.partner) {
+      return interaction.reply({ content: '❌ Esa persona ya está casada.', flags: 64 });
+    }
+
+    const cost = 5000;
+    if (userData.coins < cost) {
+      return interaction.reply({ 
+        content: `❌ Necesitas **${cost.toLocaleString()}** 🪙 para casarte.`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `marriage_${interaction.user.id}_${partner.id}_${Date.now()}`;
+    activeGames.set(gameId, {
+      proposer: interaction.user.id,
+      partner: partner.id
+    });
+
+    const acceptButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`marriage_accept_${gameId}`)
+        .setLabel('💍 Aceptar Propuesta')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`marriage_decline_${gameId}`)
+        .setLabel('❌ Rechazar')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#e91e63')
+      .setTitle('💍 Propuesta de Matrimonio')
+      .setDescription(`**${interaction.user.username}** le propuso matrimonio a **${partner.username}**!\n\n💰 Costo: ${cost.toLocaleString()} 🪙\n\n**Beneficios:**\n• Compartir inventario RPG\n• Bonus del 10% en ganancias\n• Badge especial de pareja`)
+      .setFooter({ text: `${partner.username}, acepta o rechaza la propuesta` });
+
+    await interaction.reply({ content: `${partner}`, embeds: [embed], components: [acceptButton] });
+
+    setTimeout(() => {
+      if (activeGames.has(gameId)) {
+        activeGames.delete(gameId);
+        interaction.editReply({ content: '⏰ La propuesta expiró.', embeds: [], components: [] }).catch(() => {});
+      }
+    }, 60000);
+  }
+
+  // Aceptar/Rechazar matrimonio
+  if (interaction.isButton() && interaction.customId.startsWith('marriage_')) {
+    const action = interaction.customId.split('_')[1];
+    const gameId = interaction.customId.substring(interaction.customId.indexOf('_', 9) + 1);
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Esta propuesta ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.partner) {
+      return interaction.reply({ content: '❌ Esta propuesta no es para ti.', flags: 64 });
+    }
+
+    if (action === 'decline') {
+      activeGames.delete(gameId);
+      await interaction.update({ content: '💔 Propuesta rechazada.', embeds: [], components: [] });
+      return;
+    }
+
+    // Aceptar
+    activeGames.delete(gameId);
+    
+    const proposerData = getUser(game.proposer);
+    const partnerData = getUser(game.partner);
+    const proposer = await interaction.client.users.fetch(game.proposer);
+
+    proposerData.coins -= 5000;
+    proposerData.social.partner = game.partner;
+    proposerData.social.marriageDate = Date.now();
+    partnerData.social.partner = game.proposer;
+    partnerData.social.marriageDate = Date.now();
+
+    updateUser(game.proposer, proposerData);
+    updateUser(game.partner, partnerData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#e91e63')
+      .setTitle('💍 ¡Matrimonio Celebrado!')
+      .setDescription(`**${proposer.username}** y **${interaction.user.username}** ahora están casados! 🎉\n\n💑 Disfruten sus beneficios de pareja`)
+      .setFooter({ text: 'Usa /pareja para ver tu relación' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // DIVORCIO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'divorcio') {
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.social.partner) {
+      return interaction.reply({ content: '❌ No estás casado/a.', flags: 64 });
+    }
+
+    const partnerData = getUser(userData.social.partner);
+    const partner = await interaction.client.users.fetch(userData.social.partner);
+
+    userData.social.partner = null;
+    userData.social.marriageDate = null;
+    partnerData.social.partner = null;
+    partnerData.social.marriageDate = null;
+
+    updateUser(interaction.user.id, userData);
+    updateUser(userData.social.partner, partnerData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#95a5a6')
+      .setTitle('💔 Divorcio')
+      .setDescription(`**${interaction.user.username}** y **${partner.username}** se han divorciado.`)
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // PAREJA
+  if (interaction.isChatInputCommand() && interaction.commandName === 'pareja') {
+    const target = interaction.options.getUser('usuario') || interaction.user;
+    const userData = getUser(target.id);
+
+    if (!userData.social.partner) {
+      return interaction.reply({ 
+        content: `❌ ${target.id === interaction.user.id ? 'No estás' : target.username + ' no está'} casado/a.`, 
+        flags: 64 
+      });
+    }
+
+    const partner = await interaction.client.users.fetch(userData.social.partner);
+    const daysTogether = Math.floor((Date.now() - userData.social.marriageDate) / (1000 * 60 * 60 * 24));
+
+    const embed = new EmbedBuilder()
+      .setColor('#e91e63')
+      .setTitle('💑 Relación')
+      .setDescription(`**${target.username}** está casado/a con **${partner.username}**`)
+      .addFields(
+        { name: '📅 Tiempo juntos', value: `${daysTogether} días`, inline: true },
+        { name: '💍 Desde', value: `<t:${Math.floor(userData.social.marriageDate / 1000)}:D>`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // REGALAR
+  if (interaction.isChatInputCommand() && interaction.commandName === 'regalar') {
+    const recipient = interaction.options.getUser('usuario');
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    if (recipient.id === interaction.user.id) {
+      return interaction.reply({ content: '❌ No puedes regalarte a ti mismo.', flags: 64 });
+    }
+
+    if (recipient.bot) {
+      return interaction.reply({ content: '❌ No puedes regalar a bots.', flags: 64 });
+    }
+
+    if (amount < 1) {
+      return interaction.reply({ content: '❌ Debes regalar al menos 1 moneda.', flags: 64 });
+    }
+
+    if (userData.coins < amount) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const recipientData = getUser(recipient.id);
+
+    userData.coins -= amount;
+    recipientData.coins += amount;
+    updateUser(interaction.user.id, userData);
+    updateUser(recipient.id, recipientData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🎁 Regalo Enviado')
+      .setDescription(`**${interaction.user.username}** le regaló **${amount.toLocaleString()}** 🪙 a **${recipient.username}**!`)
+      .addFields(
+        { name: '💼 Tu Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '🎁 Receptor', value: recipient.username, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // CREAR CLAN
+  if (interaction.isChatInputCommand() && interaction.commandName === 'crear-clan') {
+    const clanName = interaction.options.getString('nombre');
+    const clanTag = interaction.options.getString('tag');
+    const userData = getUser(interaction.user.id);
+    const clans = loadClans();
+
+    if (userData.social.clan) {
+      return interaction.reply({ content: '❌ Ya estás en un clan. Usa `/salir-clan` primero.', flags: 64 });
+    }
+
+    const cost = 10000;
+    if (userData.coins < cost) {
+      return interaction.reply({ 
+        content: `❌ Necesitas **${cost.toLocaleString()}** 🪙 para crear un clan.`, 
+        flags: 64 
+      });
+    }
+
+    // Verificar si el tag ya existe
+    if (Object.values(clans).some(c => c.tag === clanTag)) {
+      return interaction.reply({ content: '❌ Ese tag ya está en uso.', flags: 64 });
+    }
+
+    const clanId = `clan_${Date.now()}`;
+    clans[clanId] = {
+      name: clanName,
+      tag: clanTag,
+      leader: interaction.user.id,
+      members: [interaction.user.id],
+      bank: 0,
+      createdAt: Date.now(),
+      level: 1,
+      xp: 0
+    };
+
+    userData.coins -= cost;
+    userData.social.clan = clanId;
+    updateUser(interaction.user.id, userData);
+    saveClans(clans);
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('🏰 Clan Creado')
+      .setDescription(`**${interaction.user.username}** creó el clan **[${clanTag}] ${clanName}**!`)
+      .addFields(
+        { name: '💰 Costo', value: `${cost.toLocaleString()} 🪙`, inline: true },
+        { name: '👥 Miembros', value: '1', inline: true },
+        { name: '⭐ Nivel', value: '1', inline: true }
+      )
+      .setFooter({ text: 'Usa /invitar-clan para invitar miembros' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // UNIRSE A CLAN (Por invitación)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'invitar-clan') {
+    const target = interaction.options.getUser('usuario');
+    const userData = getUser(interaction.user.id);
+    const targetData = getUser(target.id);
+    const clans = loadClans();
+
+    if (!userData.social.clan) {
+      return interaction.reply({ content: '❌ No estás en un clan.', flags: 64 });
+    }
+
+    const clan = clans[userData.social.clan];
+    if (clan.leader !== interaction.user.id) {
+      return interaction.reply({ content: '❌ Solo el líder puede invitar miembros.', flags: 64 });
+    }
+
+    if (targetData.social.clan) {
+      return interaction.reply({ content: '❌ Esa persona ya está en un clan.', flags: 64 });
+    }
+
+    if (clan.members.length >= 20) {
+      return interaction.reply({ content: '❌ El clan está lleno (máximo 20 miembros).', flags: 64 });
+    }
+
+    const gameId = `clan_invite_${target.id}_${Date.now()}`;
+    activeGames.set(gameId, {
+      clanId: userData.social.clan,
+      inviter: interaction.user.id,
+      target: target.id
+    });
+
+    const acceptButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`clan_accept_${gameId}`)
+        .setLabel('🏰 Unirse al Clan')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`clan_decline_${gameId}`)
+        .setLabel('❌ Rechazar')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('🏰 Invitación a Clan')
+      .setDescription(`**${interaction.user.username}** te invitó a unirte al clan **[${clan.tag}] ${clan.name}**!\n\n👥 Miembros: ${clan.members.length}/20\n⭐ Nivel: ${clan.level}\n💰 Banco: ${clan.bank.toLocaleString()} 🪙`)
+      .setFooter({ text: `${target.username}, acepta o rechaza` });
+
+    await interaction.reply({ content: `${target}`, embeds: [embed], components: [acceptButton] });
+
+    setTimeout(() => {
+      if (activeGames.has(gameId)) {
+        activeGames.delete(gameId);
+        interaction.editReply({ content: '⏰ La invitación expiró.', embeds: [], components: [] }).catch(() => {});
+      }
+    }, 60000);
+  }
+
+  // Aceptar/Rechazar clan
+  if (interaction.isButton() && interaction.customId.startsWith('clan_')) {
+    const action = interaction.customId.split('_')[1];
+    const gameId = interaction.customId.substring(interaction.customId.indexOf('_', 5) + 1);
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Esta invitación ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.target) {
+      return interaction.reply({ content: '❌ Esta invitación no es para ti.', flags: 64 });
+    }
+
+    if (action === 'decline') {
+      activeGames.delete(gameId);
+      await interaction.update({ content: '❌ Invitación rechazada.', embeds: [], components: [] });
+      return;
+    }
+
+    // Aceptar
+    activeGames.delete(gameId);
+    const clans = loadClans();
+    const clan = clans[game.clanId];
+    const targetData = getUser(game.target);
+
+    clan.members.push(game.target);
+    targetData.social.clan = game.clanId;
+    updateUser(game.target, targetData);
+    saveClans(clans);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('🏰 ¡Te uniste al clan!')
+      .setDescription(`**${interaction.user.username}** se unió a **[${clan.tag}] ${clan.name}**!\n\n👥 Miembros: ${clan.members.length}/20`)
+      .setTimestamp();
+
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // INFO DEL CLAN
+  if (interaction.isChatInputCommand() && interaction.commandName === 'clan-info') {
+    const userData = getUser(interaction.user.id);
+    const clans = loadClans();
+
+    if (!userData.social.clan) {
+      return interaction.reply({ content: '❌ No estás en un clan.', flags: 64 });
+    }
+
+    const clan = clans[userData.social.clan];
+    const leader = await interaction.client.users.fetch(clan.leader);
+    const membersList = await Promise.all(
+      clan.members.slice(0, 10).map(async id => {
+        const user = await interaction.client.users.fetch(id);
+        return user.username;
+      })
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle(`🏰 [${clan.tag}] ${clan.name}`)
+      .setDescription(`**Líder:** ${leader.username}\n**Creado:** <t:${Math.floor(clan.createdAt / 1000)}:R>`)
+      .addFields(
+        { name: '👥 Miembros', value: `${clan.members.length}/20`, inline: true },
+        { name: '⭐ Nivel', value: `${clan.level}`, inline: true },
+        { name: '💰 Banco', value: `${clan.bank.toLocaleString()} 🪙`, inline: true },
+        { name: '📝 Miembros', value: membersList.join(', ') + (clan.members.length > 10 ? '...' : ''), inline: false }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // DEPOSITAR EN CLAN
+  if (interaction.isChatInputCommand() && interaction.commandName === 'depositar-clan') {
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+    const clans = loadClans();
+
+    if (!userData.social.clan) {
+      return interaction.reply({ content: '❌ No estás en un clan.', flags: 64 });
+    }
+
+    if (userData.coins < amount) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const clan = clans[userData.social.clan];
+    userData.coins -= amount;
+    clan.bank += amount;
+    clan.xp += Math.floor(amount / 100);
+
+    // Level up clan
+    const xpNeeded = clan.level * 1000;
+    if (clan.xp >= xpNeeded) {
+      clan.level += 1;
+      clan.xp -= xpNeeded;
+    }
+
+    updateUser(interaction.user.id, userData);
+    saveClans(clans);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('💰 Depósito al Clan')
+      .setDescription(`**${interaction.user.username}** depositó **${amount.toLocaleString()}** 🪙 al banco del clan!`)
+      .addFields(
+        { name: '🏰 Clan', value: `[${clan.tag}] ${clan.name}`, inline: true },
+        { name: '💰 Banco Total', value: `${clan.bank.toLocaleString()} 🪙`, inline: true },
+        { name: '⭐ Nivel', value: `${clan.level}`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // SALIR DEL CLAN
+  if (interaction.isChatInputCommand() && interaction.commandName === 'salir-clan') {
+    const userData = getUser(interaction.user.id);
+    const clans = loadClans();
+
+    if (!userData.social.clan) {
+      return interaction.reply({ content: '❌ No estás en un clan.', flags: 64 });
+    }
+
+    const clan = clans[userData.social.clan];
+    
+    if (clan.leader === interaction.user.id) {
+      return interaction.reply({ 
+        content: '❌ Eres el líder. Debes transferir el liderazgo o disolver el clan primero.', 
+        flags: 64 
+      });
+    }
+
+    clan.members = clan.members.filter(id => id !== interaction.user.id);
+    userData.social.clan = null;
+    updateUser(interaction.user.id, userData);
+    saveClans(clans);
+
+    const embed = new EmbedBuilder()
+      .setColor('#95a5a6')
+      .setTitle('👋 Abandonaste el clan')
+      .setDescription(`**${interaction.user.username}** salió de **[${clan.tag}] ${clan.name}**`)
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // REPUTACIÓN (+rep)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'rep') {
+    const target = interaction.options.getUser('usuario');
+    const type = interaction.options.getString('tipo');
+    const userData = getUser(interaction.user.id);
+    const targetData = getUser(target.id);
+
+    if (target.id === interaction.user.id) {
+      return interaction.reply({ content: '❌ No puedes darte reputación a ti mismo.', flags: 64 });
+    }
+
+    if (target.bot) {
+      return interaction.reply({ content: '❌ No puedes dar reputación a bots.', flags: 64 });
+    }
+
+    const now = Date.now();
+    const cooldown = 24 * 60 * 60 * 1000; // 24 horas
+    if (now - userData.social.lastRepDate < cooldown) {
+      const timeLeft = Math.ceil((cooldown - (now - userData.social.lastRepDate)) / 1000 / 60 / 60);
+      return interaction.reply({ 
+        content: `⏰ Debes esperar **${timeLeft} horas** antes de dar más reputación.`, 
+        flags: 64 
+      });
+    }
+
+    if (userData.social.repsGiven.includes(target.id)) {
+      return interaction.reply({ 
+        content: '❌ Ya le diste reputación a este usuario anteriormente.', 
+        flags: 64 
+      });
+    }
+
+    const repChange = type === 'positiva' ? 1 : -1;
+    targetData.social.reputation += repChange;
+    userData.social.repsGiven.push(target.id);
+    userData.social.lastRepDate = now;
+
+    updateUser(interaction.user.id, userData);
+    updateUser(target.id, targetData);
+
+    const embed = new EmbedBuilder()
+      .setColor(type === 'positiva' ? '#2ecc71' : '#e74c3c')
+      .setTitle(`${type === 'positiva' ? '⭐' : '💢'} Reputación ${type === 'positiva' ? 'Positiva' : 'Negativa'}`)
+      .setDescription(`**${interaction.user.username}** le dio reputación ${type} a **${target.username}**`)
+      .addFields({ name: '📊 Reputación total', value: `${targetData.social.reputation}` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // PERFIL SOCIAL
+  if (interaction.isChatInputCommand() && interaction.commandName === 'perfil-social') {
+    const target = interaction.options.getUser('usuario') || interaction.user;
+    const userData = getUser(target.id);
+    const clans = loadClans();
+
+    let partnerText = 'Soltero/a';
+    if (userData.social.partner) {
+      const partner = await interaction.client.users.fetch(userData.social.partner);
+      const daysTogether = Math.floor((Date.now() - userData.social.marriageDate) / (1000 * 60 * 60 * 24));
+      partnerText = `💍 ${partner.username} (${daysTogether} días)`;
+    }
+
+    let clanText = 'Sin clan';
+    if (userData.social.clan) {
+      const clan = clans[userData.social.clan];
+      clanText = `🏰 [${clan.tag}] ${clan.name}`;
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle(`💫 Perfil Social - ${target.username}`)
+      .addFields(
+        { name: '💑 Pareja', value: partnerText, inline: false },
+        { name: '🏰 Clan', value: clanText, inline: false },
+        { name: '⭐ Reputación', value: `${userData.social.reputation}`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
   }
 
   // ========== GUÍA PARA USUARIOS ==========

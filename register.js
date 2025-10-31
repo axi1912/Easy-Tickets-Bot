@@ -698,6 +698,140 @@ const commands = [
         required: true
       }
     ]
+  },
+  {
+    name: 'casarse',
+    description: '💍 Propón matrimonio a otro usuario',
+    options: [
+      {
+        name: 'pareja',
+        description: 'Usuario con quien casarte',
+        type: 6,
+        required: true
+      }
+    ]
+  },
+  {
+    name: 'divorcio',
+    description: '💔 Divorciarse de tu pareja actual'
+  },
+  {
+    name: 'pareja',
+    description: '💑 Ver información de una relación',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario a consultar (opcional)',
+        type: 6,
+        required: false
+      }
+    ]
+  },
+  {
+    name: 'regalar',
+    description: '🎁 Regala monedas a otro usuario',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario a quien regalar',
+        type: 6,
+        required: true
+      },
+      {
+        name: 'cantidad',
+        description: 'Cantidad de monedas',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'crear-clan',
+    description: '🏰 Crea tu propio clan (10,000 monedas)',
+    options: [
+      {
+        name: 'nombre',
+        description: 'Nombre del clan',
+        type: 3,
+        required: true
+      },
+      {
+        name: 'tag',
+        description: 'Tag del clan (3-5 caracteres)',
+        type: 3,
+        required: true,
+        min_length: 3,
+        max_length: 5
+      }
+    ]
+  },
+  {
+    name: 'invitar-clan',
+    description: '🏰 Invita a un usuario a tu clan (solo líder)',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario a invitar',
+        type: 6,
+        required: true
+      }
+    ]
+  },
+  {
+    name: 'clan-info',
+    description: '🏰 Ver información de tu clan'
+  },
+  {
+    name: 'depositar-clan',
+    description: '💰 Deposita monedas al banco del clan',
+    options: [
+      {
+        name: 'cantidad',
+        description: 'Cantidad a depositar',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'salir-clan',
+    description: '👋 Salir de tu clan actual'
+  },
+  {
+    name: 'rep',
+    description: '⭐ Da reputación a otro usuario (1 vez por día)',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario a dar reputación',
+        type: 6,
+        required: true
+      },
+      {
+        name: 'tipo',
+        description: 'Tipo de reputación',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '⭐ Positiva (+1)', value: 'positiva' },
+          { name: '💢 Negativa (-1)', value: 'negativa' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'perfil-social',
+    description: '💫 Ver perfil social de un usuario',
+    options: [
+      {
+        name: 'usuario',
+        description: 'Usuario a consultar (opcional)',
+        type: 6,
+        required: false
+      }
+    ]
   }
 ];
 
