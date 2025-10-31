@@ -258,6 +258,20 @@ function getUser(userId) {
       stocks: {},
       properties: [],
       crypto: { easycoins: 0 },
+      rpg: {
+        class: null,
+        level: 1,
+        xp: 0,
+        hp: 100,
+        maxHp: 100,
+        mp: 50,
+        maxMp: 50,
+        stats: { atk: 10, def: 5, magic: 5, speed: 5, luck: 5 },
+        equipment: { weapon: null, armor: null, accessory: null },
+        inventory: [],
+        lastDungeon: 0,
+        bossesDefeated: 0
+      },
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -286,6 +300,22 @@ function getUser(userId) {
   if (economy[userId].stocks === undefined) economy[userId].stocks = {};
   if (economy[userId].properties === undefined) economy[userId].properties = [];
   if (economy[userId].crypto === undefined) economy[userId].crypto = { easycoins: 0 };
+  if (economy[userId].rpg === undefined) {
+    economy[userId].rpg = {
+      class: null,
+      level: 1,
+      xp: 0,
+      hp: 100,
+      maxHp: 100,
+      mp: 50,
+      maxMp: 50,
+      stats: { atk: 10, def: 5, magic: 5, speed: 5, luck: 5 },
+      equipment: { weapon: null, armor: null, accessory: null },
+      inventory: [],
+      lastDungeon: 0,
+      bossesDefeated: 0
+    };
+  }
   
   return economy[userId];
 }
@@ -4652,6 +4682,675 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
+  }
+
+  // ========== FASE 3: SISTEMA RPG ==========
+  
+  // Datos de clases RPG
+  const classesData = {
+    warrior: {
+      name: 'Guerrero',
+      emoji: '⚔️',
+      description: 'Maestro del combate cuerpo a cuerpo',
+      stats: { atk: 20, def: 15, magic: 5, speed: 8, luck: 7 },
+      hp: 150,
+      mp: 30
+    },
+    mage: {
+      name: 'Mago',
+      emoji: '🔮',
+      description: 'Domina las artes arcanas',
+      stats: { atk: 8, def: 7, magic: 25, speed: 10, luck: 10 },
+      hp: 80,
+      mp: 120
+    },
+    rogue: {
+      name: 'Ladrón',
+      emoji: '🗡️',
+      description: 'Ágil y preciso con alta probabilidad crítica',
+      stats: { atk: 15, def: 10, magic: 8, speed: 20, luck: 20 },
+      hp: 100,
+      mp: 50
+    }
+  };
+
+  // Datos de equipamiento
+  const equipmentData = {
+    weapons: [
+      { id: 'wood_sword', name: '🗡️ Espada de Madera', cost: 500, stats: { atk: 5 } },
+      { id: 'iron_sword', name: '⚔️ Espada de Hierro', cost: 2500, stats: { atk: 15 } },
+      { id: 'steel_sword', name: '🗡️ Espada de Acero', cost: 10000, stats: { atk: 30 } },
+      { id: 'magic_staff', name: '🪄 Bastón Mágico', cost: 3000, stats: { magic: 20 } },
+      { id: 'arcane_staff', name: '🔮 Bastón Arcano', cost: 12000, stats: { magic: 40 } },
+      { id: 'dagger', name: '🔪 Daga Rápida', cost: 2000, stats: { speed: 10, luck: 10 } },
+      { id: 'legendary_blade', name: '⚡ Hoja Legendaria', cost: 50000, stats: { atk: 50, speed: 20 } }
+    ],
+    armor: [
+      { id: 'leather_armor', name: '🛡️ Armadura de Cuero', cost: 800, stats: { def: 10 } },
+      { id: 'iron_armor', name: '🛡️ Armadura de Hierro', cost: 4000, stats: { def: 25 } },
+      { id: 'magic_robe', name: '👘 Túnica Mágica', cost: 5000, stats: { magic: 15, mp: 30 } },
+      { id: 'dragon_armor', name: '🐉 Armadura de Dragón', cost: 60000, stats: { def: 50, hp: 50 } }
+    ],
+    accessories: [
+      { id: 'lucky_charm', name: '🍀 Amuleto de Suerte', cost: 1500, stats: { luck: 15 } },
+      { id: 'speed_boots', name: '👟 Botas de Velocidad', cost: 3500, stats: { speed: 20 } },
+      { id: 'power_ring', name: '💍 Anillo de Poder', cost: 8000, stats: { atk: 20, magic: 20 } }
+    ]
+  };
+
+  // ELEGIR CLASE
+  if (interaction.isChatInputCommand() && interaction.commandName === 'elegir-clase') {
+    const classId = interaction.options.getString('clase');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.rpg.class) {
+      return interaction.reply({ 
+        content: `❌ Ya eres un **${classesData[userData.rpg.class].emoji} ${classesData[userData.rpg.class].name}**. No puedes cambiar de clase.`, 
+        flags: 64 
+      });
+    }
+
+    const selectedClass = classesData[classId];
+    userData.rpg.class = classId;
+    userData.rpg.stats = { ...selectedClass.stats };
+    userData.rpg.maxHp = selectedClass.hp;
+    userData.rpg.hp = selectedClass.hp;
+    userData.rpg.maxMp = selectedClass.mp;
+    userData.rpg.mp = selectedClass.mp;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle('⚔️ Clase Seleccionada')
+      .setDescription(`**${interaction.user.username}** ahora es un **${selectedClass.emoji} ${selectedClass.name}**!\n\n*${selectedClass.description}*`)
+      .addFields(
+        { name: '❤️ HP', value: `${selectedClass.hp}`, inline: true },
+        { name: '💙 MP', value: `${selectedClass.mp}`, inline: true },
+        { name: '⚡ Nivel', value: '1', inline: true },
+        { name: '📊 Stats Base', value: `ATK: ${selectedClass.stats.atk} | DEF: ${selectedClass.stats.def}\nMAGIC: ${selectedClass.stats.magic} | SPD: ${selectedClass.stats.speed}\nLUCK: ${selectedClass.stats.luck}`, inline: false }
+      )
+      .setFooter({ text: 'Usa /comprar-equipo para mejorar tus stats' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // PERFIL RPG
+  if (interaction.isChatInputCommand() && interaction.commandName === 'perfil-rpg') {
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ No has elegido una clase. Usa `/elegir-clase` primero.', 
+        flags: 64 
+      });
+    }
+
+    const classInfo = classesData[userData.rpg.class];
+    const totalStats = { ...userData.rpg.stats };
+
+    // Calcular stats de equipamiento
+    const equipment = userData.rpg.equipment;
+    if (equipment.weapon) {
+      const weapon = [...equipmentData.weapons, ...equipmentData.armor, ...equipmentData.accessories].find(e => e.id === equipment.weapon);
+      if (weapon) {
+        Object.keys(weapon.stats).forEach(stat => {
+          totalStats[stat] = (totalStats[stat] || 0) + weapon.stats[stat];
+        });
+      }
+    }
+    if (equipment.armor) {
+      const armor = [...equipmentData.weapons, ...equipmentData.armor, ...equipmentData.accessories].find(e => e.id === equipment.armor);
+      if (armor) {
+        Object.keys(armor.stats).forEach(stat => {
+          totalStats[stat] = (totalStats[stat] || 0) + armor.stats[stat];
+        });
+      }
+    }
+    if (equipment.accessory) {
+      const accessory = [...equipmentData.weapons, ...equipmentData.armor, ...equipmentData.accessories].find(e => e.id === equipment.accessory);
+      if (accessory) {
+        Object.keys(accessory.stats).forEach(stat => {
+          totalStats[stat] = (totalStats[stat] || 0) + accessory.stats[stat];
+        });
+      }
+    }
+
+    const xpNeeded = userData.rpg.level * 100;
+    const equipList = [
+      equipment.weapon ? `Arma: ${[...equipmentData.weapons].find(e => e.id === equipment.weapon)?.name || 'Ninguna'}` : 'Arma: Ninguna',
+      equipment.armor ? `Armadura: ${[...equipmentData.armor].find(e => e.id === equipment.armor)?.name || 'Ninguna'}` : 'Armadura: Ninguna',
+      equipment.accessory ? `Accesorio: ${[...equipmentData.accessories].find(e => e.id === equipment.accessory)?.name || 'Ninguno'}` : 'Accesorio: Ninguno'
+    ].join('\n');
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle(`${classInfo.emoji} Perfil RPG - ${interaction.user.username}`)
+      .setDescription(`**Clase:** ${classInfo.name}\n**Nivel:** ${userData.rpg.level} (${userData.rpg.xp}/${xpNeeded} XP)`)
+      .addFields(
+        { name: '❤️ HP', value: `${userData.rpg.hp}/${userData.rpg.maxHp}`, inline: true },
+        { name: '💙 MP', value: `${userData.rpg.mp}/${userData.rpg.maxMp}`, inline: true },
+        { name: '🏆 Bosses', value: `${userData.rpg.bossesDefeated}`, inline: true },
+        { name: '📊 Stats Totales', value: `ATK: ${totalStats.atk} | DEF: ${totalStats.def}\nMAGIC: ${totalStats.magic} | SPD: ${totalStats.speed}\nLUCK: ${totalStats.luck}`, inline: false },
+        { name: '⚔️ Equipamiento', value: equipList, inline: false }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // COMPRAR EQUIPO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-equipo') {
+    const itemId = interaction.options.getString('item');
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Necesitas elegir una clase primero. Usa `/elegir-clase`.', 
+        flags: 64 
+      });
+    }
+
+    const allItems = [...equipmentData.weapons, ...equipmentData.armor, ...equipmentData.accessories];
+    const item = allItems.find(i => i.id === itemId);
+
+    if (!item) {
+      return interaction.reply({ content: '❌ Item no válido.', flags: 64 });
+    }
+
+    if (userData.coins < item.cost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${item.cost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    if (userData.rpg.inventory.includes(itemId)) {
+      return interaction.reply({ content: '❌ Ya tienes este item.', flags: 64 });
+    }
+
+    userData.coins -= item.cost;
+    userData.rpg.inventory.push(itemId);
+    updateUser(interaction.user.id, userData);
+
+    const statsText = Object.entries(item.stats).map(([stat, value]) => `${stat.toUpperCase()}: +${value}`).join(' | ');
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('⚔️ Equipo Comprado')
+      .setDescription(`**${interaction.user.username}** compró:\n\n${item.name}\n\n**Bonus:** ${statsText}`)
+      .addFields(
+        { name: '💰 Costo', value: `${item.cost.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: 'Usa /equipar para usarlo' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // EQUIPAR ITEM
+  if (interaction.isChatInputCommand() && interaction.commandName === 'equipar') {
+    const itemId = interaction.options.getString('item');
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.inventory.includes(itemId)) {
+      return interaction.reply({ content: '❌ No tienes este item.', flags: 64 });
+    }
+
+    const allItems = [...equipmentData.weapons, ...equipmentData.armor, ...equipmentData.accessories];
+    const item = allItems.find(i => i.id === itemId);
+
+    let slot = '';
+    if (equipmentData.weapons.includes(item)) slot = 'weapon';
+    else if (equipmentData.armor.includes(item)) slot = 'armor';
+    else if (equipmentData.accessories.includes(item)) slot = 'accessory';
+
+    userData.rpg.equipment[slot] = itemId;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('⚔️ Equipo Equipado')
+      .setDescription(`**${interaction.user.username}** equipó:\n\n${item.name}`)
+      .setFooter({ text: 'Usa /perfil-rpg para ver tus stats actualizados' });
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // MAZMORRA
+  if (interaction.isChatInputCommand() && interaction.commandName === 'mazmorra') {
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Necesitas elegir una clase. Usa `/elegir-clase`.', 
+        flags: 64 
+      });
+    }
+
+    const now = Date.now();
+    const cooldown = 2 * 60 * 60 * 1000; // 2 horas
+    if (now - userData.rpg.lastDungeon < cooldown) {
+      const timeLeft = Math.ceil((cooldown - (now - userData.rpg.lastDungeon)) / 1000 / 60);
+      return interaction.reply({ 
+        content: `⏰ Debes esperar **${timeLeft} minutos** antes de entrar a otra mazmorra.`, 
+        flags: 64 
+      });
+    }
+
+    userData.rpg.lastDungeon = now;
+    updateUser(interaction.user.id, userData);
+
+    const embed1 = new EmbedBuilder()
+      .setColor('#8b4513')
+      .setTitle('🏰 Entrando a la Mazmorra')
+      .setDescription(`**${interaction.user.username}** entra a una mazmorra oscura...\n\n*Explorando...*`)
+      .setFooter({ text: 'Preparándose para la aventura' });
+
+    await interaction.reply({ embeds: [embed1] });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Simular combates
+    const encounters = Math.floor(Math.random() * 3) + 3; // 3-5 encuentros
+    let totalXP = 0;
+    let totalCoins = 0;
+    let survived = true;
+
+    for (let i = 0; i < encounters; i++) {
+      const enemyPower = Math.floor(Math.random() * 50) + userData.rpg.level * 10;
+      const playerPower = userData.rpg.stats.atk + userData.rpg.stats.magic + userData.rpg.stats.luck;
+      
+      if (playerPower > enemyPower) {
+        const xp = Math.floor(Math.random() * 30) + 20;
+        const coins = Math.floor(Math.random() * 500) + 200;
+        totalXP += xp;
+        totalCoins += coins;
+      } else {
+        survived = false;
+        break;
+      }
+    }
+
+    if (survived) {
+      userData.coins += totalCoins;
+      userData.rpg.xp += totalXP;
+      
+      // Subir de nivel si es necesario
+      const xpNeeded = userData.rpg.level * 100;
+      if (userData.rpg.xp >= xpNeeded) {
+        userData.rpg.level += 1;
+        userData.rpg.xp -= xpNeeded;
+        userData.rpg.stats.atk += 5;
+        userData.rpg.stats.def += 3;
+        userData.rpg.stats.magic += 3;
+        userData.rpg.maxHp += 20;
+        userData.rpg.hp = userData.rpg.maxHp;
+      }
+      
+      updateUser(interaction.user.id, userData);
+
+      const embed2 = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🏆 Mazmorra Completada')
+        .setDescription(`**${interaction.user.username}** sobrevivió a la mazmorra!\n\n**Encuentros:** ${encounters}\n**Resultado:** Victoria`)
+        .addFields(
+          { name: '⭐ XP Ganado', value: `+${totalXP} XP`, inline: true },
+          { name: '💰 Monedas', value: `+${totalCoins.toLocaleString()} 🪙`, inline: true },
+          { name: '📊 Nivel', value: `${userData.rpg.level}`, inline: true }
+        )
+        .setFooter({ text: 'Puedes volver en 2 horas' })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed2] });
+    } else {
+      const embed2 = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('💀 Derrota')
+        .setDescription(`**${interaction.user.username}** fue derrotado en la mazmorra...\n\nHuiste antes de perder todo.`)
+        .setFooter({ text: 'Entrena más y vuelve en 2 horas' });
+
+      await interaction.editReply({ embeds: [embed2] });
+    }
+  }
+
+  // BOSS FIGHT (Cooperativo)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'boss') {
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Necesitas elegir una clase. Usa `/elegir-clase`.', 
+        flags: 64 
+      });
+    }
+
+    const gameId = `boss_${interaction.guild.id}_${Date.now()}`;
+    
+    // Buscar raid activa
+    let bossRaid = null;
+    for (const [key, game] of activeGames.entries()) {
+      if (key.startsWith('boss_') && game.status === 'waiting' && game.guildId === interaction.guild.id) {
+        bossRaid = key;
+        break;
+      }
+    }
+
+    if (!bossRaid) {
+      // Crear nueva raid
+      const bossHP = 500 + (Math.floor(Math.random() * 5) * 200); // 500-1300 HP
+      activeGames.set(gameId, {
+        guildId: interaction.guild.id,
+        status: 'waiting',
+        players: [{ id: interaction.user.id, name: interaction.user.username, data: userData }],
+        bossHP: bossHP,
+        bossMaxHP: bossHP,
+        bossName: ['🐉 Dragón Ancestral', '👹 Demonio Oscuro', '💀 Rey Esqueleto', '🦖 Hidra'][Math.floor(Math.random() * 4)]
+      });
+
+      const joinButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`boss_join_${gameId}`)
+          .setLabel('⚔️ Unirse a la Raid')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('⚔️ Boss Raid Iniciada')
+        .setDescription(`**${interaction.user.username}** desafió a un Boss!\n\n${activeGames.get(gameId).bossName}\n❤️ HP: ${bossHP}\n\n👥 **Jugadores:** 1/5\n*Se requieren mínimo 2 jugadores*\n*La raid inicia en 45 segundos*`)
+        .setFooter({ text: 'Haz click abajo para unirte' });
+
+      await interaction.reply({ embeds: [embed], components: [joinButton] });
+
+      // Auto-start
+      setTimeout(async () => {
+        const game = activeGames.get(gameId);
+        if (game && game.status === 'waiting') {
+          if (game.players.length >= 2) {
+            await startBossRaid(interaction, gameId);
+          } else {
+            activeGames.delete(gameId);
+            await interaction.editReply({ 
+              content: '❌ Raid cancelada: no se alcanzó el mínimo de 2 jugadores.', 
+              embeds: [], 
+              components: [] 
+            });
+          }
+        }
+      }, 45000);
+
+    } else {
+      // Unirse a raid existente
+      const game = activeGames.get(bossRaid);
+      
+      if (game.players.some(p => p.id === interaction.user.id)) {
+        return interaction.reply({ content: '❌ Ya estás en esta raid.', flags: 64 });
+      }
+
+      if (game.players.length >= 5) {
+        return interaction.reply({ content: '❌ Esta raid está llena.', flags: 64 });
+      }
+
+      game.players.push({ id: interaction.user.id, name: interaction.user.username, data: userData });
+
+      await interaction.reply({ content: `✅ Te uniste a la raid del Boss!`, flags: 64 });
+
+      if (game.players.length >= 5) {
+        await startBossRaid(interaction, bossRaid);
+      }
+    }
+  }
+
+  // Unirse a Boss
+  if (interaction.isButton() && interaction.customId.startsWith('boss_join_')) {
+    const gameId = interaction.customId.replace('boss_join_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game || game.status !== 'waiting') {
+      return interaction.reply({ content: '❌ Esta raid ya no está disponible.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Necesitas elegir una clase primero. Usa `/elegir-clase`.', 
+        flags: 64 
+      });
+    }
+
+    if (game.players.some(p => p.id === interaction.user.id)) {
+      return interaction.reply({ content: '❌ Ya estás en esta raid.', flags: 64 });
+    }
+
+    if (game.players.length >= 5) {
+      return interaction.reply({ content: '❌ Esta raid está llena.', flags: 64 });
+    }
+
+    game.players.push({ id: interaction.user.id, name: interaction.user.username, data: userData });
+
+    const joinButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`boss_join_${gameId}`)
+        .setLabel('⚔️ Unirse a la Raid')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(game.players.length >= 5)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setTitle('⚔️ Boss Raid')
+      .setDescription(`${game.bossName}\n❤️ HP: ${game.bossHP}\n\n👥 **Jugadores:** ${game.players.length}/5\n\n**Raid:**\n${game.players.map(p => `• ${p.name} (Lv ${p.data.rpg.level})`).join('\n')}`)
+      .setFooter({ text: `${interaction.user.username} se unió!` });
+
+    await interaction.update({ embeds: [embed], components: [joinButton] });
+
+    if (game.players.length >= 5) {
+      await startBossRaid(interaction, gameId);
+    }
+  }
+
+  // Función auxiliar para iniciar Boss Raid
+  async function startBossRaid(interaction, gameId) {
+    const game = activeGames.get(gameId);
+    if (!game || game.status !== 'waiting') return;
+
+    game.status = 'fighting';
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('⚔️ ¡Boss Raid en Progreso!')
+      .setDescription(`${game.bossName}\n❤️ HP: ${game.bossHP}/${game.bossMaxHP}\n\n**El combate ha comenzado...**`)
+      .setFooter({ text: 'Luchando contra el boss' });
+
+    await interaction.channel.send({ embeds: [embed] });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Simular combate
+    let bossHP = game.bossHP;
+    const totalPlayerPower = game.players.reduce((sum, p) => {
+      return sum + p.data.rpg.stats.atk + p.data.rpg.stats.magic;
+    }, 0);
+
+    const damageDealt = totalPlayerPower * (3 + Math.random() * 2);
+    bossHP -= damageDealt;
+
+    if (bossHP <= 0) {
+      // Victoria
+      const reward = Math.floor(game.bossMaxHP * 5);
+      const xpReward = Math.floor(game.bossMaxHP / 2);
+
+      for (const player of game.players) {
+        const pData = getUser(player.id);
+        pData.coins += reward;
+        pData.rpg.xp += xpReward;
+        pData.rpg.bossesDefeated += 1;
+        
+        // Level up check
+        const xpNeeded = pData.rpg.level * 100;
+        if (pData.rpg.xp >= xpNeeded) {
+          pData.rpg.level += 1;
+          pData.rpg.xp -= xpNeeded;
+          pData.rpg.stats.atk += 5;
+          pData.rpg.stats.def += 3;
+          pData.rpg.maxHp += 20;
+          pData.rpg.hp = pData.rpg.maxHp;
+        }
+        
+        updateUser(player.id, pData);
+      }
+
+      const embed2 = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🏆 ¡VICTORIA!')
+        .setDescription(`¡El raid derrotó a **${game.bossName}**!\n\n**Recompensas por jugador:**\n💰 ${reward.toLocaleString()} 🪙\n⭐ ${xpReward} XP`)
+        .addFields({ name: '👥 Participantes', value: game.players.map(p => p.name).join(', ') })
+        .setTimestamp();
+
+      await interaction.channel.send({ embeds: [embed2] });
+    } else {
+      // Derrota
+      const embed2 = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('💀 Derrota')
+        .setDescription(`El raid fue derrotado por **${game.bossName}**...\n\n❤️ HP restante del Boss: ${Math.floor(bossHP)}\n\nEl boss era demasiado fuerte.`)
+        .setFooter({ text: 'Necesitan más jugadores o mejor equipo' });
+
+      await interaction.channel.send({ embeds: [embed2] });
+    }
+
+    activeGames.delete(gameId);
+  }
+
+  // DUELAR RPG (PvP)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'duelar-rpg') {
+    const opponent = interaction.options.getUser('oponente');
+    const userData = getUser(interaction.user.id);
+    const opponentData = getUser(opponent.id);
+
+    if (opponent.id === interaction.user.id) {
+      return interaction.reply({ content: '❌ No puedes duelo contra ti mismo.', flags: 64 });
+    }
+
+    if (opponent.bot) {
+      return interaction.reply({ content: '❌ No puedes duelar contra bots.', flags: 64 });
+    }
+
+    if (!userData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Necesitas elegir una clase. Usa `/elegir-clase`.', 
+        flags: 64 
+      });
+    }
+
+    if (!opponentData.rpg.class) {
+      return interaction.reply({ 
+        content: '❌ Tu oponente no tiene una clase RPG.', 
+        flags: 64 
+      });
+    }
+
+    const gameId = `rpgduel_${interaction.user.id}_${opponent.id}_${Date.now()}`;
+    activeGames.set(gameId, {
+      challenger: interaction.user.id,
+      opponent: opponent.id
+    });
+
+    const acceptButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rpgduel_accept_${gameId}`)
+        .setLabel('⚔️ Aceptar Duelo')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`rpgduel_decline_${gameId}`)
+        .setLabel('❌ Rechazar')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setTitle('⚔️ Desafío RPG')
+      .setDescription(`**${interaction.user.username}** desafió a **${opponent.username}** a un duelo RPG!\n\n**${interaction.user.username}:** ${classesData[userData.rpg.class].emoji} Lv${userData.rpg.level}\n**${opponent.username}:** ${classesData[opponentData.rpg.class].emoji} Lv${opponentData.rpg.level}`)
+      .setFooter({ text: `${opponent.username}, acepta o rechaza el duelo` });
+
+    await interaction.reply({ content: `${opponent}`, embeds: [embed], components: [acceptButton] });
+
+    // Timeout de 30 segundos
+    setTimeout(() => {
+      if (activeGames.has(gameId)) {
+        activeGames.delete(gameId);
+        interaction.editReply({ content: '⏰ El duelo expiró.', embeds: [], components: [] }).catch(() => {});
+      }
+    }, 30000);
+  }
+
+  // Aceptar/Rechazar duelo RPG
+  if (interaction.isButton() && interaction.customId.startsWith('rpgduel_')) {
+    const action = interaction.customId.split('_')[1];
+    const gameId = interaction.customId.substring(interaction.customId.indexOf('_', 8) + 1);
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este duelo ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.opponent) {
+      return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
+    }
+
+    if (action === 'decline') {
+      activeGames.delete(gameId);
+      await interaction.update({ content: '❌ Duelo rechazado.', embeds: [], components: [] });
+      return;
+    }
+
+    // Iniciar combate
+    activeGames.delete(gameId);
+
+    const p1Data = getUser(game.challenger);
+    const p2Data = getUser(game.opponent);
+    const p1 = await interaction.client.users.fetch(game.challenger);
+    const p2 = await interaction.client.users.fetch(game.opponent);
+
+    // Calcular poder total
+    const p1Power = p1Data.rpg.stats.atk + p1Data.rpg.stats.magic + p1Data.rpg.stats.speed + p1Data.rpg.stats.luck;
+    const p2Power = p2Data.rpg.stats.atk + p2Data.rpg.stats.magic + p2Data.rpg.stats.speed + p2Data.rpg.stats.luck;
+
+    // Simular combate
+    await interaction.update({ content: '⚔️ **¡El combate ha comenzado!**', embeds: [], components: [] });
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const totalPower = p1Power + p2Power;
+    const p1WinChance = p1Power / totalPower;
+    const winner = Math.random() < p1WinChance ? game.challenger : game.opponent;
+    const loser = winner === game.challenger ? game.opponent : game.challenger;
+
+    const winnerData = getUser(winner);
+    const loserData = getUser(loser);
+    const winnerUser = winner === game.challenger ? p1 : p2;
+    const loserUser = loser === game.challenger ? p1 : p2;
+
+    // Recompensas
+    const reward = 500 + Math.floor(Math.random() * 500);
+    const xp = 50 + Math.floor(Math.random() * 50);
+
+    winnerData.coins += reward;
+    winnerData.rpg.xp += xp;
+    updateUser(winner, winnerData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('⚔️ Resultado del Duelo RPG')
+      .setDescription(`**${winnerUser.username}** venció a **${loserUser.username}**!`)
+      .addFields(
+        { name: '🏆 Ganador', value: `${winnerUser.username} (${classesData[winnerData.rpg.class].emoji} Lv${winnerData.rpg.level})`, inline: true },
+        { name: '💰 Recompensa', value: `${reward.toLocaleString()} 🪙 + ${xp} XP`, inline: true }
+      )
+      .setFooter({ text: 'Buen combate' })
+      .setTimestamp();
+
+    await interaction.channel.send({ embeds: [embed] });
   }
 
   // ========== GUÍA PARA USUARIOS ==========

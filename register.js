@@ -601,6 +601,103 @@ const commands = [
   {
     name: 'mercado-cripto',
     description: '₿ Ver el precio actual de EasyCoins y tu portafolio'
+  },
+  {
+    name: 'elegir-clase',
+    description: '⚔️ Elige tu clase RPG (Guerrero, Mago o Ladrón)',
+    options: [
+      {
+        name: 'clase',
+        description: 'Tu clase RPG',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '⚔️ Guerrero - Alto ATK/DEF', value: 'warrior' },
+          { name: '🔮 Mago - Alto MAGIC/MP', value: 'mage' },
+          { name: '🗡️ Ladrón - Alto SPEED/LUCK', value: 'rogue' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'perfil-rpg',
+    description: '⚔️ Ver tu perfil RPG con stats y equipamiento'
+  },
+  {
+    name: 'comprar-equipo',
+    description: '⚔️ Compra armas, armaduras y accesorios',
+    options: [
+      {
+        name: 'item',
+        description: 'Item a comprar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🗡️ Espada de Madera (500) +5 ATK', value: 'wood_sword' },
+          { name: '⚔️ Espada de Hierro (2,500) +15 ATK', value: 'iron_sword' },
+          { name: '🗡️ Espada de Acero (10,000) +30 ATK', value: 'steel_sword' },
+          { name: '🪄 Bastón Mágico (3,000) +20 MAGIC', value: 'magic_staff' },
+          { name: '🔮 Bastón Arcano (12,000) +40 MAGIC', value: 'arcane_staff' },
+          { name: '🔪 Daga Rápida (2,000) +10 SPD/LUCK', value: 'dagger' },
+          { name: '⚡ Hoja Legendaria (50,000) +50 ATK +20 SPD', value: 'legendary_blade' },
+          { name: '🛡️ Armadura de Cuero (800) +10 DEF', value: 'leather_armor' },
+          { name: '🛡️ Armadura de Hierro (4,000) +25 DEF', value: 'iron_armor' },
+          { name: '👘 Túnica Mágica (5,000) +15 MAGIC +30 MP', value: 'magic_robe' },
+          { name: '🐉 Armadura de Dragón (60,000) +50 DEF +50 HP', value: 'dragon_armor' },
+          { name: '🍀 Amuleto de Suerte (1,500) +15 LUCK', value: 'lucky_charm' },
+          { name: '👟 Botas de Velocidad (3,500) +20 SPEED', value: 'speed_boots' },
+          { name: '💍 Anillo de Poder (8,000) +20 ATK/MAGIC', value: 'power_ring' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'equipar',
+    description: '⚔️ Equipa un item de tu inventario',
+    options: [
+      {
+        name: 'item',
+        description: 'Item a equipar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🗡️ Espada de Madera', value: 'wood_sword' },
+          { name: '⚔️ Espada de Hierro', value: 'iron_sword' },
+          { name: '🗡️ Espada de Acero', value: 'steel_sword' },
+          { name: '🪄 Bastón Mágico', value: 'magic_staff' },
+          { name: '🔮 Bastón Arcano', value: 'arcane_staff' },
+          { name: '🔪 Daga Rápida', value: 'dagger' },
+          { name: '⚡ Hoja Legendaria', value: 'legendary_blade' },
+          { name: '🛡️ Armadura de Cuero', value: 'leather_armor' },
+          { name: '🛡️ Armadura de Hierro', value: 'iron_armor' },
+          { name: '👘 Túnica Mágica', value: 'magic_robe' },
+          { name: '🐉 Armadura de Dragón', value: 'dragon_armor' },
+          { name: '🍀 Amuleto de Suerte', value: 'lucky_charm' },
+          { name: '👟 Botas de Velocidad', value: 'speed_boots' },
+          { name: '💍 Anillo de Poder', value: 'power_ring' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'mazmorra',
+    description: '🏰 Explora una mazmorra peligrosa (2h cooldown)'
+  },
+  {
+    name: 'boss',
+    description: '⚔️ Inicia o únete a una raid contra un boss (2-5 jugadores)'
+  },
+  {
+    name: 'duelar-rpg',
+    description: '⚔️ Desafía a otro jugador a un duelo RPG',
+    options: [
+      {
+        name: 'oponente',
+        description: 'Usuario a desafiar',
+        type: 6,
+        required: true
+      }
+    ]
   }
 ];
 
