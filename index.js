@@ -4196,9 +4196,10 @@ client.on('interactionCreate', async interaction => {
   // Respuesta de Trivia
   if (interaction.isButton() && interaction.customId.startsWith('trivia_answer_')) {
     const parts = interaction.customId.split('_');
-    const gameId = parts[2];
-    const selectedAnswer = parseInt(parts[3]);
-    const correctAnswer = parseInt(parts[4]);
+    // Format: trivia_answer_{userId}_{timestamp}_{idx}_{correct}
+    const gameId = `trivia_${parts[2]}_${parts[3]}`;
+    const selectedAnswer = parseInt(parts[4]);
+    const correctAnswer = parseInt(parts[5]);
     const game = activeGames.get(gameId);
 
     if (!game) {
@@ -6201,7 +6202,7 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
   }
 
-  // POKER (Texas Hold'em simplificado vs Bot)
+  // POKER (Texas Hold'em interactivo vs Bot)
   if (interaction.isChatInputCommand() && interaction.commandName === 'poker') {
     const bet = interaction.options.getInteger('apuesta');
     const userData = getUser(interaction.user.id);
@@ -6217,8 +6218,6 @@ client.on('interactionCreate', async interaction => {
     if (activeGames.has(gameId)) {
       return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
     }
-
-    activeGames.set(gameId, { userId: interaction.user.id, bet });
 
     try {
       userData.coins -= bet;
@@ -6245,69 +6244,339 @@ client.on('interactionCreate', async interaction => {
       const botCards = [deck.pop(), deck.pop()];
       const community = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
 
-      // Evaluar manos (simplificado)
-      const evaluateHand = (cards) => {
-        const allCards = [...cards, ...community].sort((a, b) => b.numValue - a.numValue);
-        const values = allCards.map(c => c.numValue);
-        const suits = allCards.map(c => c.suit);
-
-        // Par
-        const pairs = values.filter((v, i, arr) => arr.indexOf(v) !== i);
-        if (pairs.length > 0) return { score: 2, high: Math.max(...pairs) };
-        
-        // Carta alta
-        return { score: 1, high: Math.max(...values) };
-      };
-
-      const playerHand = evaluateHand(playerCards);
-      const botHand = evaluateHand(botCards);
-
-      let winner = null;
-      if (playerHand.score > botHand.score) {
-        winner = 'player';
-      } else if (botHand.score > playerHand.score) {
-        winner = 'bot';
-      } else {
-        winner = playerHand.high > botHand.high ? 'player' : 'bot';
-      }
-
-      const winnings = winner === 'player' ? bet * 2 : 0;
-      userData.coins += winnings;
-      userData.stats.gamesPlayed += 1;
-      if (winner === 'player') {
-        userData.stats.gamesWon += 1;
-        userData.stats.totalWinnings += winnings;
-      } else {
-        userData.stats.gamesLost += 1;
-        userData.stats.totalLosses += bet;
-      }
-      updateUser(interaction.user.id, userData);
+      // Guardar estado del juego
+      activeGames.set(gameId, { 
+        userId: interaction.user.id, 
+        bet,
+        playerCards,
+        botCards,
+        community,
+        deck,
+        pot: bet * 2,
+        stage: 'preflop'
+      });
 
       const playerCardsStr = playerCards.map(c => `${c.value}${c.suit}`).join(' ');
-      const botCardsStr = botCards.map(c => `${c.value}${c.suit}`).join(' ');
-      const communityStr = community.map(c => `${c.value}${c.suit}`).join(' ');
+
+      // Botones iniciales
+      const actionButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`poker_call_${gameId}`)
+          .setLabel('✅ Ver (Call)')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`poker_raise_${gameId}`)
+          .setLabel(`💰 Subir ${Math.floor(bet * 0.5)}🪙`)
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`poker_fold_${gameId}`)
+          .setLabel('❌ Retirarse (Fold)')
+          .setStyle(ButtonStyle.Danger)
+      );
 
       const embed = new EmbedBuilder()
-        .setColor(winner === 'player' ? '#2ecc71' : '#e74c3c')
+        .setColor('#9b59b6')
         .setTitle('🃏 Poker - Texas Hold\'em')
-        .setDescription(`**${interaction.user.username}** apostó **${bet.toLocaleString()}** 🪙\n\n**Comunitarias:**\n${communityStr}\n\n**Tu mano:** ${playerCardsStr}\n**Bot:** ${botCardsStr}\n\n${winner === 'player' ? '🎉 **¡Ganaste!**' : '💔 **Perdiste**'}`)
+        .setDescription(`**${interaction.user.username}** apostó **${bet.toLocaleString()}** 🪙\n\n**📋 Pre-Flop**\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${(bet * 2).toLocaleString()} 🪙`)
         .addFields(
-          { name: winner === 'player' ? '💰 Ganaste' : '💸 Perdiste', value: `${winner === 'player' ? '+' : ''}${(winnings - bet).toLocaleString()} 🪙`, inline: true },
-          { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+          { name: '📊 Tu Apuesta', value: `${bet.toLocaleString()} 🪙`, inline: true },
+          { name: '🏦 Balance Actual', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
         )
-        .setFooter({ text: 'Ea$y Esports Poker' })
-        .setTimestamp();
+        .setFooter({ text: '¿Qué deseas hacer? Tienes 45 segundos' });
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.reply({ embeds: [embed], components: [actionButtons] });
+
+      // Timeout de 45 segundos
+      setTimeout(() => {
+        if (activeGames.has(gameId)) {
+          activeGames.delete(gameId);
+          interaction.editReply({ 
+            content: '⏰ Se acabó el tiempo. Te retiraste automáticamente.', 
+            embeds: [], 
+            components: [] 
+          }).catch(() => {});
+        }
+      }, 45000);
 
     } catch (error) {
       console.error('Error en poker:', error);
       userData.coins += bet;
       updateUser(interaction.user.id, userData);
       await interaction.reply({ content: '❌ Error en el juego. Apuesta devuelta.' });
-    } finally {
       activeGames.delete(gameId);
     }
+  }
+
+  // Botones de Poker - CALL
+  if (interaction.isButton() && interaction.customId.startsWith('poker_call_')) {
+    const gameId = interaction.customId.replace('poker_call_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
+    }
+
+    // Revelar el Flop (3 cartas comunitarias)
+    const communityFlop = game.community.slice(0, 3);
+    const communityStr = communityFlop.map(c => `${c.value}${c.suit}`).join(' ');
+    const playerCardsStr = game.playerCards.map(c => `${c.value}${c.suit}`).join(' ');
+
+    game.stage = 'flop';
+    activeGames.set(gameId, game);
+
+    const actionButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`poker_turn_${gameId}`)
+        .setLabel('➡️ Ver Turn')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`poker_fold_${gameId}`)
+        .setLabel('❌ Retirarse')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('🃏 Poker - Flop')
+      .setDescription(`**📋 The Flop**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${game.pot.toLocaleString()} 🪙`)
+      .setFooter({ text: '¿Continuar al Turn?' });
+
+    await interaction.update({ embeds: [embed], components: [actionButtons] });
+  }
+
+  // Botones de Poker - TURN
+  if (interaction.isButton() && interaction.customId.startsWith('poker_turn_')) {
+    const gameId = interaction.customId.replace('poker_turn_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
+    }
+
+    // Revelar el Turn (4ta carta)
+    const communityTurn = game.community.slice(0, 4);
+    const communityStr = communityTurn.map(c => `${c.value}${c.suit}`).join(' ');
+    const playerCardsStr = game.playerCards.map(c => `${c.value}${c.suit}`).join(' ');
+
+    game.stage = 'turn';
+    activeGames.set(gameId, game);
+
+    const actionButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`poker_river_${gameId}`)
+        .setLabel('➡️ Ver River')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`poker_fold_${gameId}`)
+        .setLabel('❌ Retirarse')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#e67e22')
+      .setTitle('🃏 Poker - Turn')
+      .setDescription(`**📋 The Turn**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${game.pot.toLocaleString()} 🪙`)
+      .setFooter({ text: '¿Continuar al River?' });
+
+    await interaction.update({ embeds: [embed], components: [actionButtons] });
+  }
+
+  // Botones de Poker - RIVER (Showdown)
+  if (interaction.isButton() && interaction.customId.startsWith('poker_river_')) {
+    const gameId = interaction.customId.replace('poker_river_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
+    }
+
+    // Evaluar manos
+    const evaluateHand = (cards, community) => {
+      const allCards = [...cards, ...community].sort((a, b) => b.numValue - a.numValue);
+      const values = allCards.map(c => c.numValue);
+      const suits = allCards.map(c => c.suit);
+
+      // Flush (5 cartas del mismo palo)
+      const suitCounts = {};
+      suits.forEach(s => suitCounts[s] = (suitCounts[s] || 0) + 1);
+      const hasFlush = Object.values(suitCounts).some(count => count >= 5);
+      if (hasFlush) return { score: 6, name: 'Flush', high: Math.max(...values) };
+
+      // Straight (5 cartas consecutivas)
+      const uniqueValues = [...new Set(values)].sort((a, b) => b - a);
+      for (let i = 0; i <= uniqueValues.length - 5; i++) {
+        if (uniqueValues[i] - uniqueValues[i + 4] === 4) {
+          return { score: 5, name: 'Straight', high: uniqueValues[i] };
+        }
+      }
+
+      // Three of a kind (Trio)
+      const valueCounts = {};
+      values.forEach(v => valueCounts[v] = (valueCounts[v] || 0) + 1);
+      const trips = Object.entries(valueCounts).filter(([_, count]) => count === 3);
+      if (trips.length > 0) {
+        return { score: 4, name: 'Trío', high: parseInt(trips[0][0]) };
+      }
+
+      // Two pair (Doble par)
+      const pairs = Object.entries(valueCounts).filter(([_, count]) => count === 2);
+      if (pairs.length >= 2) {
+        const pairValues = pairs.map(([v]) => parseInt(v));
+        return { score: 3, name: 'Doble Par', high: Math.max(...pairValues) };
+      }
+
+      // One pair (Par)
+      if (pairs.length === 1) {
+        return { score: 2, name: 'Par', high: parseInt(pairs[0][0]) };
+      }
+
+      // High card
+      return { score: 1, name: 'Carta Alta', high: Math.max(...values) };
+    };
+
+    const playerHand = evaluateHand(game.playerCards, game.community);
+    const botHand = evaluateHand(game.botCards, game.community);
+
+    let winner = null;
+    if (playerHand.score > botHand.score) {
+      winner = 'player';
+    } else if (botHand.score > playerHand.score) {
+      winner = 'bot';
+    } else {
+      winner = playerHand.high >= botHand.high ? 'player' : 'bot';
+    }
+
+    const userData = getUser(interaction.user.id);
+    const winnings = winner === 'player' ? game.pot : 0;
+    userData.coins += winnings;
+    userData.stats.gamesPlayed += 1;
+    if (winner === 'player') {
+      userData.stats.gamesWon += 1;
+      userData.stats.totalWinnings += winnings;
+    } else {
+      userData.stats.gamesLost += 1;
+      userData.stats.totalLosses += game.bet;
+    }
+    updateUser(interaction.user.id, userData);
+
+    const playerCardsStr = game.playerCards.map(c => `${c.value}${c.suit}`).join(' ');
+    const botCardsStr = game.botCards.map(c => `${c.value}${c.suit}`).join(' ');
+    const communityStr = game.community.map(c => `${c.value}${c.suit}`).join(' ');
+
+    const embed = new EmbedBuilder()
+      .setColor(winner === 'player' ? '#2ecc71' : '#e74c3c')
+      .setTitle('🃏 Poker - Showdown!')
+      .setDescription(`**📋 The River - Resultado Final**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:** ${playerCardsStr}\n*${playerHand.name}*\n\n**🤖 Bot:** ${botCardsStr}\n*${botHand.name}*\n\n${winner === 'player' ? '🎉 **¡GANASTE!**' : '💔 **El Bot Ganó**'}`)
+      .addFields(
+        { name: winner === 'player' ? '💰 Ganaste' : '💸 Perdiste', value: `${winner === 'player' ? '+' : '-'}${(winner === 'player' ? winnings - game.bet : game.bet).toLocaleString()} 🪙`, inline: true },
+        { name: '🏦 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '💰 Pozo Total', value: `${game.pot.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: 'Ea$y Esports Poker' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [embed], components: [] });
+    activeGames.delete(gameId);
+  }
+
+  // Botones de Poker - RAISE
+  if (interaction.isButton() && interaction.customId.startsWith('poker_raise_')) {
+    const gameId = interaction.customId.replace('poker_raise_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const raiseAmount = Math.floor(game.bet * 0.5);
+
+    if (userData.coins < raiseAmount) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas para subir. Necesitas ${raiseAmount} 🪙`, 
+        flags: 64 
+      });
+    }
+
+    userData.coins -= raiseAmount;
+    game.pot += raiseAmount * 2; // El bot también sube
+    game.stage = 'flop';
+    activeGames.set(gameId, game);
+    updateUser(interaction.user.id, userData);
+
+    // Revelar Flop después de subir
+    const communityFlop = game.community.slice(0, 3);
+    const communityStr = communityFlop.map(c => `${c.value}${c.suit}`).join(' ');
+    const playerCardsStr = game.playerCards.map(c => `${c.value}${c.suit}`).join(' ');
+
+    const actionButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`poker_turn_${gameId}`)
+        .setLabel('➡️ Ver Turn')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`poker_fold_${gameId}`)
+        .setLabel('❌ Retirarse')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🃏 Poker - ¡Subiste la apuesta!')
+      .setDescription(`**📋 The Flop**\n\nSubiste **${raiseAmount.toLocaleString()}** 🪙. El bot igualó.\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${game.pot.toLocaleString()} 🪙`)
+      .addFields(
+        { name: '💸 Apostado Total', value: `${(game.bet + raiseAmount).toLocaleString()} 🪙`, inline: true },
+        { name: '🏦 Balance Actual', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: '¿Continuar al Turn?' });
+
+    await interaction.update({ embeds: [embed], components: [actionButtons] });
+  }
+
+  // Botones de Poker - FOLD
+  if (interaction.isButton() && interaction.customId.startsWith('poker_fold_')) {
+    const gameId = interaction.customId.replace('poker_fold_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    userData.stats.gamesPlayed += 1;
+    userData.stats.gamesLost += 1;
+    userData.stats.totalLosses += game.bet;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#95a5a6')
+      .setTitle('🃏 Poker - Te Retiraste')
+      .setDescription(`${interaction.user.username} decidió retirarse.\n\n**💸 Perdiste:** ${game.bet.toLocaleString()} 🪙\n**🏦 Balance:** ${userData.coins.toLocaleString()} 🪙`)
+      .setFooter({ text: 'Ea$y Esports Poker' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [embed], components: [] });
+    activeGames.delete(gameId);
   }
 
   // ========== GUÍA PARA USUARIOS ==========
