@@ -465,6 +465,7 @@ client.on('interactionCreate', async interaction => {
       status: 'open'
     };
     saveTickets(tickets);
+    console.log(`✅ Ticket guardado: ${canal.id} | Usuario: ${interaction.user.username}`);
 
     // Embed con datos del usuario
     const embedDatos = new EmbedBuilder()
@@ -548,9 +549,12 @@ client.on('interactionCreate', async interaction => {
   // Botón: Reclamar ticket
   if (interaction.isButton() && interaction.customId === 'reclamar_ticket') {
     const tickets = loadTickets();
+    console.log(`🔍 Intentando reclamar ticket en canal: ${interaction.channel.id}`);
+    console.log(`📋 Tickets cargados:`, Object.keys(tickets));
     const ticket = tickets[interaction.channel.id];
 
     if (!ticket) {
+      console.log(`❌ Ticket no encontrado para canal: ${interaction.channel.id}`);
       return interaction.reply({ content: '❌ No es un ticket válido.', flags: 64 });
     }
 
@@ -767,6 +771,7 @@ client.on('interactionCreate', async interaction => {
       status: 'open'
     };
     saveTickets(tickets);
+    console.log(`✅ Ticket de soporte guardado: ${canal.id} | Usuario: ${interaction.user.username} | Tipo: ${interaction.customId}`);
 
     // Embed del ticket
     const embedTicket = new EmbedBuilder()
