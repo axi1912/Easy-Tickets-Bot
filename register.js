@@ -832,6 +832,71 @@ const commands = [
         required: false
       }
     ]
+  },
+  {
+    name: 'comprar-caja',
+    description: '🎁 Compra una caja misteriosa',
+    options: [
+      {
+        name: 'tipo',
+        description: 'Tipo de caja',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '📦 Común (1,000)', value: 'common' },
+          { name: '🎁 Rara (5,000)', value: 'rare' },
+          { name: '💎 Legendaria (25,000)', value: 'legendary' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'abrir-caja',
+    description: '🎁 Abre una de tus cajas misteriosas',
+    options: [
+      {
+        name: 'tipo',
+        description: 'Tipo de caja a abrir',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '📦 Común', value: 'common' },
+          { name: '🎁 Rara', value: 'rare' },
+          { name: '💎 Legendaria', value: 'legendary' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'pase-batalla',
+    description: '🎖️ Ver tu progreso en el Pase de Batalla'
+  },
+  {
+    name: 'reclamar-tier',
+    description: '🎖️ Reclama las recompensas de un tier del Pase',
+    options: [
+      {
+        name: 'tier',
+        description: 'Tier a reclamar (0-10)',
+        type: 4,
+        required: true,
+        min_value: 0,
+        max_value: 10
+      }
+    ]
+  },
+  {
+    name: 'poker',
+    description: '🃏 Juega poker contra el bot',
+    options: [
+      {
+        name: 'apuesta',
+        description: 'Cantidad a apostar',
+        type: 4,
+        required: true,
+        min_value: 100
+      }
+    ]
   }
 ];
 

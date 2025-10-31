@@ -280,6 +280,17 @@ function getUser(userId) {
         repsGiven: [],
         lastRepDate: 0
       },
+      battlePass: {
+        tier: 0,
+        xp: 0,
+        season: 1,
+        claimed: []
+      },
+      boxes: {
+        common: 0,
+        rare: 0,
+        legendary: 0
+      },
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -332,6 +343,21 @@ function getUser(userId) {
       reputation: 0,
       repsGiven: [],
       lastRepDate: 0
+    };
+  }
+  if (economy[userId].battlePass === undefined) {
+    economy[userId].battlePass = {
+      tier: 0,
+      xp: 0,
+      season: 1,
+      claimed: []
+    };
+  }
+  if (economy[userId].boxes === undefined) {
+    economy[userId].boxes = {
+      common: 0,
+      rare: 0,
+      legendary: 0
     };
   }
   
@@ -5940,6 +5966,348 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
+  }
+
+  // ========== FASE 5: SISTEMA DE RECOMPENSAS ==========
+  
+  // COMPRAR CAJA
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-caja') {
+    const boxType = interaction.options.getString('tipo');
+    const userData = getUser(interaction.user.id);
+
+    const boxPrices = {
+      common: 1000,
+      rare: 5000,
+      legendary: 25000
+    };
+
+    const cost = boxPrices[boxType];
+
+    if (userData.coins < cost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${cost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    userData.coins -= cost;
+    userData.boxes[boxType] += 1;
+    updateUser(interaction.user.id, userData);
+
+    const boxEmojis = {
+      common: '📦',
+      rare: '🎁',
+      legendary: '💎'
+    };
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🎁 Caja Comprada')
+      .setDescription(`**${interaction.user.username}** compró una caja ${boxEmojis[boxType]} **${boxType.toUpperCase()}**!`)
+      .addFields(
+        { name: '💰 Costo', value: `${cost.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '📦 Cajas', value: `${userData.boxes.common} 📦 | ${userData.boxes.rare} 🎁 | ${userData.boxes.legendary} 💎`, inline: false }
+      )
+      .setFooter({ text: 'Usa /abrir-caja para abrirla' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // ABRIR CAJA
+  if (interaction.isChatInputCommand() && interaction.commandName === 'abrir-caja') {
+    const boxType = interaction.options.getString('tipo');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.boxes[boxType] < 1) {
+      return interaction.reply({ 
+        content: `❌ No tienes cajas de tipo **${boxType}**. Usa \`/comprar-caja\`.`, 
+        flags: 64 
+      });
+    }
+
+    userData.boxes[boxType] -= 1;
+
+    const boxEmojis = {
+      common: '📦',
+      rare: '🎁',
+      legendary: '💎'
+    };
+
+    const embed1 = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🎁 Abriendo Caja...')
+      .setDescription(`${boxEmojis[boxType]} **${interaction.user.username}** está abriendo una caja **${boxType.toUpperCase()}**...\n\n✨ *Revelando contenido...*`)
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed1] });
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Sistema de recompensas según rareza
+    const rewards = {
+      common: [
+        { type: 'coins', amount: () => Math.floor(Math.random() * 1000) + 500, emoji: '🪙', name: 'Monedas' },
+        { type: 'bpxp', amount: () => 50, emoji: '⭐', name: 'XP Pase Batalla' }
+      ],
+      rare: [
+        { type: 'coins', amount: () => Math.floor(Math.random() * 5000) + 2500, emoji: '🪙', name: 'Monedas' },
+        { type: 'bpxp', amount: () => 150, emoji: '⭐', name: 'XP Pase Batalla' },
+        { type: 'box', amount: () => 1, emoji: '📦', name: 'Caja Común' }
+      ],
+      legendary: [
+        { type: 'coins', amount: () => Math.floor(Math.random() * 25000) + 15000, emoji: '🪙', name: 'Monedas' },
+        { type: 'bpxp', amount: () => 500, emoji: '⭐', name: 'XP Pase Batalla' },
+        { type: 'box', amount: () => 1, emoji: '🎁', name: 'Caja Rara' },
+        { type: 'rpgxp', amount: () => 200, emoji: '⚔️', name: 'XP RPG' }
+      ]
+    };
+
+    const possibleRewards = rewards[boxType];
+    const numRewards = boxType === 'common' ? 2 : boxType === 'rare' ? 3 : 4;
+    const selectedRewards = [];
+
+    for (let i = 0; i < numRewards; i++) {
+      const reward = possibleRewards[Math.floor(Math.random() * possibleRewards.length)];
+      const amount = reward.amount();
+      selectedRewards.push({ ...reward, amount });
+
+      // Aplicar recompensas
+      if (reward.type === 'coins') {
+        userData.coins += amount;
+      } else if (reward.type === 'bpxp') {
+        userData.battlePass.xp += amount;
+      } else if (reward.type === 'box') {
+        userData.boxes.common += amount;
+      } else if (reward.type === 'rpgxp' && userData.rpg.class) {
+        userData.rpg.xp += amount;
+      }
+    }
+
+    // Check BP level up
+    const xpPerTier = 1000;
+    while (userData.battlePass.xp >= xpPerTier && userData.battlePass.tier < 10) {
+      userData.battlePass.tier += 1;
+      userData.battlePass.xp -= xpPerTier;
+    }
+
+    updateUser(interaction.user.id, userData);
+
+    const rewardsList = selectedRewards.map(r => `${r.emoji} **${r.amount.toLocaleString()}** ${r.name}`).join('\n');
+
+    const embed2 = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle(`🎉 Caja ${boxType.toUpperCase()} Abierta!`)
+      .setDescription(`**${interaction.user.username}** recibió:\n\n${rewardsList}`)
+      .addFields({ name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙` })
+      .setFooter({ text: `Cajas restantes: ${userData.boxes.common} 📦 | ${userData.boxes.rare} 🎁 | ${userData.boxes.legendary} 💎` })
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed2] });
+  }
+
+  // PASE BATALLA
+  if (interaction.isChatInputCommand() && interaction.commandName === 'pase-batalla') {
+    const userData = getUser(interaction.user.id);
+
+    const tiers = [
+      { tier: 0, reward: '🎁 Caja Común', xp: 0 },
+      { tier: 1, reward: '💰 2,500 Monedas', xp: 1000 },
+      { tier: 2, reward: '🎁 Caja Rara', xp: 2000 },
+      { tier: 3, reward: '💰 5,000 Monedas', xp: 3000 },
+      { tier: 4, reward: '⚔️ Item RPG Aleatorio', xp: 4000 },
+      { tier: 5, reward: '💰 10,000 Monedas', xp: 5000 },
+      { tier: 6, reward: '💎 Caja Legendaria', xp: 6000 },
+      { tier: 7, reward: '💰 20,000 Monedas', xp: 7000 },
+      { tier: 8, reward: '🎁 2x Caja Rara', xp: 8000 },
+      { tier: 9, reward: '💰 50,000 Monedas', xp: 9000 },
+      { tier: 10, reward: '👑 Título Legendario + 100K', xp: 10000 }
+    ];
+
+    const xpPerTier = 1000;
+    const progressBar = '█'.repeat(Math.floor(userData.battlePass.xp / xpPerTier * 10)) + '░'.repeat(10 - Math.floor(userData.battlePass.xp / xpPerTier * 10));
+
+    const tiersList = tiers.map(t => {
+      const claimed = userData.battlePass.claimed.includes(t.tier);
+      const unlocked = userData.battlePass.tier >= t.tier;
+      const status = claimed ? '✅' : unlocked ? '🎁' : '🔒';
+      return `${status} **Tier ${t.tier}:** ${t.reward}`;
+    }).join('\n');
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle('🎖️ Pase de Batalla - Temporada 1')
+      .setDescription(`**${interaction.user.username}**\n\n**Tier Actual:** ${userData.battlePass.tier}/10\n**XP:** ${userData.battlePass.xp}/${xpPerTier}\n${progressBar}\n\n${tiersList}`)
+      .setFooter({ text: 'Gana XP jugando y abriendo cajas • Usa /reclamar-tier para cobrar' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // RECLAMAR TIER
+  if (interaction.isChatInputCommand() && interaction.commandName === 'reclamar-tier') {
+    const tier = interaction.options.getInteger('tier');
+    const userData = getUser(interaction.user.id);
+
+    if (tier > userData.battlePass.tier) {
+      return interaction.reply({ 
+        content: `❌ No has alcanzado el Tier ${tier}. Tu tier actual es ${userData.battlePass.tier}.`, 
+        flags: 64 
+      });
+    }
+
+    if (userData.battlePass.claimed.includes(tier)) {
+      return interaction.reply({ 
+        content: `❌ Ya reclamaste las recompensas del Tier ${tier}.`, 
+        flags: 64 
+      });
+    }
+
+    userData.battlePass.claimed.push(tier);
+
+    // Dar recompensas según tier
+    const rewards = {
+      0: { coins: 0, boxes: { common: 1 }, msg: '🎁 Caja Común' },
+      1: { coins: 2500, msg: '💰 2,500 Monedas' },
+      2: { boxes: { rare: 1 }, msg: '🎁 Caja Rara' },
+      3: { coins: 5000, msg: '💰 5,000 Monedas' },
+      4: { coins: 3000, msg: '⚔️ 3,000 Monedas (Item RPG)' },
+      5: { coins: 10000, msg: '💰 10,000 Monedas' },
+      6: { boxes: { legendary: 1 }, msg: '💎 Caja Legendaria' },
+      7: { coins: 20000, msg: '💰 20,000 Monedas' },
+      8: { boxes: { rare: 2 }, msg: '🎁 2x Caja Rara' },
+      9: { coins: 50000, msg: '💰 50,000 Monedas' },
+      10: { coins: 100000, msg: '👑 Título Legendario + 100,000 Monedas' }
+    };
+
+    const reward = rewards[tier];
+    
+    if (reward.coins) userData.coins += reward.coins;
+    if (reward.boxes) {
+      if (reward.boxes.common) userData.boxes.common += reward.boxes.common;
+      if (reward.boxes.rare) userData.boxes.rare += reward.boxes.rare;
+      if (reward.boxes.legendary) userData.boxes.legendary += reward.boxes.legendary;
+    }
+
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle(`🎖️ Tier ${tier} Reclamado`)
+      .setDescription(`**${interaction.user.username}** recibió:\n\n${reward.msg}`)
+      .addFields({ name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // POKER (Texas Hold'em simplificado vs Bot)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'poker') {
+    const bet = interaction.options.getInteger('apuesta');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.coins < bet) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `poker_${interaction.user.id}_${Date.now()}`;
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, bet });
+
+    try {
+      userData.coins -= bet;
+      updateUser(interaction.user.id, userData);
+
+      // Crear baraja
+      const suits = ['♠️', '♥️', '♣️', '♦️'];
+      const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+      const deck = [];
+      for (const suit of suits) {
+        for (const value of values) {
+          deck.push({ suit, value, numValue: values.indexOf(value) + 2 });
+        }
+      }
+
+      // Mezclar
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+
+      // Repartir cartas
+      const playerCards = [deck.pop(), deck.pop()];
+      const botCards = [deck.pop(), deck.pop()];
+      const community = [deck.pop(), deck.pop(), deck.pop(), deck.pop(), deck.pop()];
+
+      // Evaluar manos (simplificado)
+      const evaluateHand = (cards) => {
+        const allCards = [...cards, ...community].sort((a, b) => b.numValue - a.numValue);
+        const values = allCards.map(c => c.numValue);
+        const suits = allCards.map(c => c.suit);
+
+        // Par
+        const pairs = values.filter((v, i, arr) => arr.indexOf(v) !== i);
+        if (pairs.length > 0) return { score: 2, high: Math.max(...pairs) };
+        
+        // Carta alta
+        return { score: 1, high: Math.max(...values) };
+      };
+
+      const playerHand = evaluateHand(playerCards);
+      const botHand = evaluateHand(botCards);
+
+      let winner = null;
+      if (playerHand.score > botHand.score) {
+        winner = 'player';
+      } else if (botHand.score > playerHand.score) {
+        winner = 'bot';
+      } else {
+        winner = playerHand.high > botHand.high ? 'player' : 'bot';
+      }
+
+      const winnings = winner === 'player' ? bet * 2 : 0;
+      userData.coins += winnings;
+      userData.stats.gamesPlayed += 1;
+      if (winner === 'player') {
+        userData.stats.gamesWon += 1;
+        userData.stats.totalWinnings += winnings;
+      } else {
+        userData.stats.gamesLost += 1;
+        userData.stats.totalLosses += bet;
+      }
+      updateUser(interaction.user.id, userData);
+
+      const playerCardsStr = playerCards.map(c => `${c.value}${c.suit}`).join(' ');
+      const botCardsStr = botCards.map(c => `${c.value}${c.suit}`).join(' ');
+      const communityStr = community.map(c => `${c.value}${c.suit}`).join(' ');
+
+      const embed = new EmbedBuilder()
+        .setColor(winner === 'player' ? '#2ecc71' : '#e74c3c')
+        .setTitle('🃏 Poker - Texas Hold\'em')
+        .setDescription(`**${interaction.user.username}** apostó **${bet.toLocaleString()}** 🪙\n\n**Comunitarias:**\n${communityStr}\n\n**Tu mano:** ${playerCardsStr}\n**Bot:** ${botCardsStr}\n\n${winner === 'player' ? '🎉 **¡Ganaste!**' : '💔 **Perdiste**'}`)
+        .addFields(
+          { name: winner === 'player' ? '💰 Ganaste' : '💸 Perdiste', value: `${winner === 'player' ? '+' : ''}${(winnings - bet).toLocaleString()} 🪙`, inline: true },
+          { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: 'Ea$y Esports Poker' })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+
+    } catch (error) {
+      console.error('Error en poker:', error);
+      userData.coins += bet;
+      updateUser(interaction.user.id, userData);
+      await interaction.reply({ content: '❌ Error en el juego. Apuesta devuelta.' });
+    } finally {
+      activeGames.delete(gameId);
+    }
   }
 
   // ========== GUÍA PARA USUARIOS ==========
