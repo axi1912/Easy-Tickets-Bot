@@ -460,6 +460,147 @@ const commands = [
         ]
       }
     ]
+  },
+  {
+    name: 'comprar-negocio',
+    description: '🏢 Compra un negocio que genera ingresos pasivos',
+    options: [
+      {
+        name: 'negocio',
+        description: 'Negocio a comprar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🍋 Puesto de Limonada (5,000 - 50/h)', value: 'lemonade' },
+          { name: '🌮 Food Truck (25,000 - 300/2h)', value: 'food_truck' },
+          { name: '☕ Café (75,000 - 1,000/3h)', value: 'cafe' },
+          { name: '🍽️ Restaurante (200,000 - 3,000/4h)', value: 'restaurant' },
+          { name: '🏋️ Gimnasio (500,000 - 8,000/6h)', value: 'gym' },
+          { name: '🎪 Club Nocturno (1,500,000 - 25,000/8h)', value: 'nightclub' },
+          { name: '🎰 Casino (5,000,000 - 100,000/12h)', value: 'casino' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'mis-negocios',
+    description: '🏢 Ver tus negocios y ganancias pendientes'
+  },
+  {
+    name: 'cobrar-negocios',
+    description: '💰 Cobra las ganancias de tus negocios'
+  },
+  {
+    name: 'comprar-acciones',
+    description: '📈 Compra acciones de empresas',
+    options: [
+      {
+        name: 'empresa',
+        description: 'Empresa',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🎮 Ea$y Esports', value: 'ea$y' },
+          { name: '💻 TechCorp', value: 'techcorp' },
+          { name: '🍔 FoodChain', value: 'foodchain' },
+          { name: '🚗 AutoMax', value: 'automax' }
+        ]
+      },
+      {
+        name: 'cantidad',
+        description: 'Cantidad de acciones',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'vender-acciones',
+    description: '📉 Vende tus acciones',
+    options: [
+      {
+        name: 'empresa',
+        description: 'Empresa',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🎮 Ea$y Esports', value: 'ea$y' },
+          { name: '💻 TechCorp', value: 'techcorp' },
+          { name: '🍔 FoodChain', value: 'foodchain' },
+          { name: '🚗 AutoMax', value: 'automax' }
+        ]
+      },
+      {
+        name: 'cantidad',
+        description: 'Cantidad de acciones',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'ver-acciones',
+    description: '📊 Ver el mercado de acciones y tus inversiones'
+  },
+  {
+    name: 'comprar-propiedad',
+    description: '🏆 Compra propiedades de prestigio',
+    options: [
+      {
+        name: 'propiedad',
+        description: 'Propiedad a comprar',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '🚲 Bicicleta (1,000)', value: 'bicycle' },
+          { name: '🏍️ Motocicleta (15,000)', value: 'motorcycle' },
+          { name: '🚗 Auto (50,000)', value: 'car' },
+          { name: '🏎️ Auto Deportivo (250,000)', value: 'sportscar' },
+          { name: '🏢 Apartamento (100,000)', value: 'apartment' },
+          { name: '🏠 Casa (500,000)', value: 'house' },
+          { name: '🏰 Mansión (2,000,000)', value: 'mansion' },
+          { name: '🛥️ Yate (5,000,000)', value: 'yacht' },
+          { name: '🚁 Helicóptero (10,000,000)', value: 'helicopter' },
+          { name: '🏝️ Isla Privada (50,000,000)', value: 'island' }
+        ]
+      }
+    ]
+  },
+  {
+    name: 'mis-propiedades',
+    description: '🏆 Ver tus propiedades de prestigio'
+  },
+  {
+    name: 'comprar-cripto',
+    description: '₿ Compra EasyCoins (criptomoneda volátil)',
+    options: [
+      {
+        name: 'cantidad',
+        description: 'Cantidad de EasyCoins',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'vender-cripto',
+    description: '₿ Vende tus EasyCoins',
+    options: [
+      {
+        name: 'cantidad',
+        description: 'Cantidad de EasyCoins',
+        type: 4,
+        required: true,
+        min_value: 1
+      }
+    ]
+  },
+  {
+    name: 'mercado-cripto',
+    description: '₿ Ver el precio actual de EasyCoins y tu portafolio'
   }
 ];
 

@@ -253,6 +253,11 @@ function getUser(userId) {
       workXP: 0,
       workStreak: 0,
       lastWorkDate: null,
+      businesses: [],
+      lastBusinessClaim: 0,
+      stocks: {},
+      properties: [],
+      crypto: { easycoins: 0 },
       stats: {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -276,6 +281,11 @@ function getUser(userId) {
   if (economy[userId].workXP === undefined) economy[userId].workXP = 0;
   if (economy[userId].workStreak === undefined) economy[userId].workStreak = 0;
   if (economy[userId].lastWorkDate === undefined) economy[userId].lastWorkDate = null;
+  if (economy[userId].businesses === undefined) economy[userId].businesses = [];
+  if (economy[userId].lastBusinessClaim === undefined) economy[userId].lastBusinessClaim = 0;
+  if (economy[userId].stocks === undefined) economy[userId].stocks = {};
+  if (economy[userId].properties === undefined) economy[userId].properties = [];
+  if (economy[userId].crypto === undefined) economy[userId].crypto = { easycoins: 0 };
   
   return economy[userId];
 }
@@ -4160,6 +4170,488 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // ========== FASE 2: ECONOMÍA AVANZADA ==========
+  
+  // Sistema de precios de acciones (cambian cada hora basado en la hora actual)
+  function getStockPrices() {
+    const hour = new Date().getHours();
+    const day = new Date().getDate();
+    const seed = hour + day * 24; // Cambia cada hora
+    
+    const baseRandom = (id) => {
+      let hash = 0;
+      const str = id + seed;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash = hash & hash;
+      }
+      return Math.abs(hash % 100) / 100;
+    };
+
+    return {
+      'ea$y': Math.floor(500 + baseRandom('easy') * 1000), // 500-1500
+      'techcorp': Math.floor(800 + baseRandom('tech') * 1200), // 800-2000
+      'foodchain': Math.floor(300 + baseRandom('food') * 700), // 300-1000
+      'automax': Math.floor(1000 + baseRandom('auto') * 2000) // 1000-3000
+    };
+  }
+
+  // Datos de negocios disponibles
+  const businessesData = [
+    { id: 'lemonade', name: '🍋 Puesto de Limonada', cost: 5000, income: 50, time: 1 },
+    { id: 'food_truck', name: '🌮 Food Truck', cost: 25000, income: 300, time: 2 },
+    { id: 'cafe', name: '☕ Café', cost: 75000, income: 1000, time: 3 },
+    { id: 'restaurant', name: '🍽️ Restaurante', cost: 200000, income: 3000, time: 4 },
+    { id: 'gym', name: '🏋️ Gimnasio', cost: 500000, income: 8000, time: 6 },
+    { id: 'nightclub', name: '🎪 Club Nocturno', cost: 1500000, income: 25000, time: 8 },
+    { id: 'casino', name: '🎰 Casino', cost: 5000000, income: 100000, time: 12 }
+  ];
+
+  // COMPRAR NEGOCIO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-negocio') {
+    const businessId = interaction.options.getString('negocio');
+    const userData = getUser(interaction.user.id);
+    
+    const business = businessesData.find(b => b.id === businessId);
+    if (!business) {
+      return interaction.reply({ content: '❌ Negocio no válido.', flags: 64 });
+    }
+
+    if (userData.coins < business.cost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${business.cost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    // Verificar si ya tiene este negocio
+    if (userData.businesses.some(b => b.id === businessId)) {
+      return interaction.reply({ content: '❌ Ya tienes este negocio.', flags: 64 });
+    }
+
+    userData.coins -= business.cost;
+    userData.businesses.push({
+      id: businessId,
+      name: business.name,
+      income: business.income,
+      time: business.time,
+      purchaseDate: Date.now()
+    });
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('🏢 Negocio Comprado')
+      .setDescription(`¡Felicitaciones **${interaction.user.username}**!\n\nCompraste: **${business.name}**`)
+      .addFields(
+        { name: '💰 Costo', value: `${business.cost.toLocaleString()} 🪙`, inline: true },
+        { name: '📈 Ingreso', value: `${business.income.toLocaleString()} 🪙 cada ${business.time}h`, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: 'Usa /cobrar-negocios para reclamar tus ganancias' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // MIS NEGOCIOS
+  if (interaction.isChatInputCommand() && interaction.commandName === 'mis-negocios') {
+    const userData = getUser(interaction.user.id);
+
+    if (userData.businesses.length === 0) {
+      return interaction.reply({ 
+        content: '❌ No tienes ningún negocio. Usa `/comprar-negocio` para empezar.', 
+        flags: 64 
+      });
+    }
+
+    const now = Date.now();
+    const timeSinceLastClaim = now - userData.lastBusinessClaim;
+    
+    let totalPending = 0;
+    const businessList = userData.businesses.map(b => {
+      const hoursPassed = Math.floor(timeSinceLastClaim / (1000 * 60 * 60));
+      const cyclesComplete = Math.floor(hoursPassed / b.time);
+      const pendingIncome = cyclesComplete * b.income;
+      totalPending += pendingIncome;
+      
+      return `**${b.name}**\n💰 Genera: ${b.income.toLocaleString()} 🪙 cada ${b.time}h\n💸 Pendiente: ${pendingIncome.toLocaleString()} 🪙`;
+    }).join('\n\n');
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('🏢 Mis Negocios')
+      .setDescription(`**${interaction.user.username}**, estos son tus negocios:\n\n${businessList}`)
+      .addFields({ name: '💰 Total Pendiente', value: `${totalPending.toLocaleString()} 🪙` })
+      .setFooter({ text: 'Usa /cobrar-negocios para reclamar tus ganancias' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // COBRAR NEGOCIOS
+  if (interaction.isChatInputCommand() && interaction.commandName === 'cobrar-negocios') {
+    const userData = getUser(interaction.user.id);
+
+    if (userData.businesses.length === 0) {
+      return interaction.reply({ 
+        content: '❌ No tienes ningún negocio.', 
+        flags: 64 
+      });
+    }
+
+    const now = Date.now();
+    const timeSinceLastClaim = now - (userData.lastBusinessClaim || userData.businesses[0].purchaseDate);
+    const hoursPassed = Math.floor(timeSinceLastClaim / (1000 * 60 * 60));
+
+    if (hoursPassed < 1) {
+      const minutesLeft = 60 - Math.floor((timeSinceLastClaim % (1000 * 60 * 60)) / (1000 * 60));
+      return interaction.reply({ 
+        content: `⏰ Debes esperar **${minutesLeft} minutos** antes de cobrar nuevamente.`, 
+        flags: 64 
+      });
+    }
+
+    let totalEarned = 0;
+    const earnings = userData.businesses.map(b => {
+      const cyclesComplete = Math.floor(hoursPassed / b.time);
+      const earned = cyclesComplete * b.income;
+      totalEarned += earned;
+      return `${b.name}: **${earned.toLocaleString()}** 🪙`;
+    }).join('\n');
+
+    userData.coins += totalEarned;
+    userData.lastBusinessClaim = now;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#2ecc71')
+      .setTitle('💰 Ganancias Cobradas')
+      .setDescription(`**${interaction.user.username}** cobró sus negocios:\n\n${earnings}`)
+      .addFields(
+        { name: '💸 Total Ganado', value: `${totalEarned.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: `Tiempo transcurrido: ${hoursPassed} horas` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // COMPRAR ACCIONES
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-acciones') {
+    const company = interaction.options.getString('empresa');
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    const stockPrices = getStockPrices();
+    const price = stockPrices[company];
+    const totalCost = price * amount;
+
+    if (userData.coins < totalCost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${totalCost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    userData.coins -= totalCost;
+    if (!userData.stocks[company]) userData.stocks[company] = 0;
+    userData.stocks[company] += amount;
+    updateUser(interaction.user.id, userData);
+
+    const companyNames = {
+      'ea$y': '🎮 Ea$y Esports',
+      'techcorp': '💻 TechCorp',
+      'foodchain': '🍔 FoodChain',
+      'automax': '🚗 AutoMax'
+    };
+
+    const embed = new EmbedBuilder()
+      .setColor('#9b59b6')
+      .setTitle('📈 Acciones Compradas')
+      .setDescription(`**${interaction.user.username}** compró acciones!\n\n**Empresa:** ${companyNames[company]}\n**Cantidad:** ${amount} acciones\n**Precio unitario:** ${price.toLocaleString()} 🪙`)
+      .addFields(
+        { name: '💸 Total Pagado', value: `${totalCost.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '📊 Total en esta empresa', value: `${userData.stocks[company]} acciones`, inline: true }
+      )
+      .setFooter({ text: 'Los precios cambian cada hora' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // VENDER ACCIONES
+  if (interaction.isChatInputCommand() && interaction.commandName === 'vender-acciones') {
+    const company = interaction.options.getString('empresa');
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    if (!userData.stocks[company] || userData.stocks[company] < amount) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes acciones de esta empresa.`, 
+        flags: 64 
+      });
+    }
+
+    const stockPrices = getStockPrices();
+    const price = stockPrices[company];
+    const totalEarned = price * amount;
+
+    userData.coins += totalEarned;
+    userData.stocks[company] -= amount;
+    if (userData.stocks[company] === 0) delete userData.stocks[company];
+    updateUser(interaction.user.id, userData);
+
+    const companyNames = {
+      'ea$y': '🎮 Ea$y Esports',
+      'techcorp': '💻 TechCorp',
+      'foodchain': '🍔 FoodChain',
+      'automax': '🚗 AutoMax'
+    };
+
+    const embed = new EmbedBuilder()
+      .setColor('#e67e22')
+      .setTitle('📉 Acciones Vendidas')
+      .setDescription(`**${interaction.user.username}** vendió acciones!\n\n**Empresa:** ${companyNames[company]}\n**Cantidad:** ${amount} acciones\n**Precio unitario:** ${price.toLocaleString()} 🪙`)
+      .addFields(
+        { name: '💰 Total Recibido', value: `${totalEarned.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // VER ACCIONES (Mercado)
+  if (interaction.isChatInputCommand() && interaction.commandName === 'ver-acciones') {
+    const userData = getUser(interaction.user.id);
+    const stockPrices = getStockPrices();
+
+    const companyNames = {
+      'ea$y': '🎮 Ea$y Esports',
+      'techcorp': '💻 TechCorp',
+      'foodchain': '🍔 FoodChain',
+      'automax': '🚗 AutoMax'
+    };
+
+    const marketList = Object.entries(stockPrices).map(([id, price]) => {
+      const owned = userData.stocks[id] || 0;
+      const value = owned * price;
+      return `**${companyNames[id]}**\n💰 Precio: ${price.toLocaleString()} 🪙\n📊 Tienes: ${owned} acciones (${value.toLocaleString()} 🪙)`;
+    }).join('\n\n');
+
+    const totalValue = Object.entries(userData.stocks).reduce((sum, [company, amount]) => {
+      return sum + (amount * stockPrices[company]);
+    }, 0);
+
+    const embed = new EmbedBuilder()
+      .setColor('#3498db')
+      .setTitle('📈 Mercado de Acciones')
+      .setDescription(`**Precios actuales:**\n\n${marketList}`)
+      .addFields({ name: '💼 Valor Total de tus Acciones', value: `${totalValue.toLocaleString()} 🪙` })
+      .setFooter({ text: 'Los precios cambian cada hora • Usa /comprar-acciones o /vender-acciones' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // PROPIEDADES - Sistema de prestigio
+  const propertiesData = [
+    { id: 'bicycle', name: '🚲 Bicicleta', cost: 1000, emoji: '🚲', category: 'Vehículo' },
+    { id: 'motorcycle', name: '🏍️ Motocicleta', cost: 15000, emoji: '🏍️', category: 'Vehículo' },
+    { id: 'car', name: '🚗 Auto', cost: 50000, emoji: '🚗', category: 'Vehículo' },
+    { id: 'sportscar', name: '🏎️ Auto Deportivo', cost: 250000, emoji: '🏎️', category: 'Vehículo' },
+    { id: 'apartment', name: '🏢 Apartamento', cost: 100000, emoji: '🏢', category: 'Propiedad' },
+    { id: 'house', name: '🏠 Casa', cost: 500000, emoji: '🏠', category: 'Propiedad' },
+    { id: 'mansion', name: '🏰 Mansión', cost: 2000000, emoji: '🏰', category: 'Propiedad' },
+    { id: 'yacht', name: '🛥️ Yate', cost: 5000000, emoji: '🛥️', category: 'Lujo' },
+    { id: 'helicopter', name: '🚁 Helicóptero', cost: 10000000, emoji: '🚁', category: 'Lujo' },
+    { id: 'island', name: '🏝️ Isla Privada', cost: 50000000, emoji: '🏝️', category: 'Lujo' }
+  ];
+
+  // COMPRAR PROPIEDAD
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-propiedad') {
+    const propertyId = interaction.options.getString('propiedad');
+    const userData = getUser(interaction.user.id);
+    
+    const property = propertiesData.find(p => p.id === propertyId);
+    if (!property) {
+      return interaction.reply({ content: '❌ Propiedad no válida.', flags: 64 });
+    }
+
+    if (userData.coins < property.cost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${property.cost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    if (userData.properties.includes(propertyId)) {
+      return interaction.reply({ content: '❌ Ya tienes esta propiedad.', flags: 64 });
+    }
+
+    userData.coins -= property.cost;
+    userData.properties.push(propertyId);
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🏆 Propiedad Adquirida')
+      .setDescription(`¡Felicitaciones **${interaction.user.username}**!\n\n${property.emoji} Compraste: **${property.name}**`)
+      .addFields(
+        { name: '💰 Costo', value: `${property.cost.toLocaleString()} 🪙`, inline: true },
+        { name: '📁 Categoría', value: property.category, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: 'Las propiedades son items de prestigio que puedes mostrar' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // MIS PROPIEDADES
+  if (interaction.isChatInputCommand() && interaction.commandName === 'mis-propiedades') {
+    const userData = getUser(interaction.user.id);
+
+    if (userData.properties.length === 0) {
+      return interaction.reply({ 
+        content: '❌ No tienes propiedades. Usa `/comprar-propiedad` para adquirir una.', 
+        flags: 64 
+      });
+    }
+
+    const ownedProperties = userData.properties.map(propId => {
+      const prop = propertiesData.find(p => p.id === propId);
+      return `${prop.emoji} **${prop.name}** - ${prop.category}`;
+    }).join('\n');
+
+    const totalValue = userData.properties.reduce((sum, propId) => {
+      const prop = propertiesData.find(p => p.id === propId);
+      return sum + prop.cost;
+    }, 0);
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🏆 Mis Propiedades')
+      .setDescription(`**${interaction.user.username}**, estas son tus propiedades:\n\n${ownedProperties}`)
+      .addFields({ name: '💰 Valor Total', value: `${totalValue.toLocaleString()} 🪙` })
+      .setFooter({ text: `Total de propiedades: ${userData.properties.length}` })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // CRIPTO - Sistema de trading
+  function getCryptoPrice() {
+    const hour = new Date().getHours();
+    const minute = new Date().getMinutes();
+    const seed = hour * 60 + minute; // Cambia cada minuto para más volatilidad
+    
+    const random = Math.abs(Math.sin(seed) * 10000) % 100;
+    return Math.floor(50 + random * 5); // 50-550 coins por EasyCoin
+  }
+
+  // COMPRAR CRIPTO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'comprar-cripto') {
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    const price = getCryptoPrice();
+    const totalCost = price * amount;
+
+    if (userData.coins < totalCost) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Necesitas: **${totalCost.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    userData.coins -= totalCost;
+    userData.crypto.easycoins += amount;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#16a085')
+      .setTitle('₿ EasyCoin Comprado')
+      .setDescription(`**${interaction.user.username}** compró criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin`)
+      .addFields(
+        { name: '💸 Total Pagado', value: `${totalCost.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '₿ Total EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true }
+      )
+      .setFooter({ text: 'El precio cambia cada minuto - Alta volatilidad' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // VENDER CRIPTO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'vender-cripto') {
+    const amount = interaction.options.getInteger('cantidad');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.crypto.easycoins < amount) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes EasyCoins. Tienes: **${userData.crypto.easycoins}** ₿`, 
+        flags: 64 
+      });
+    }
+
+    const price = getCryptoPrice();
+    const totalEarned = price * amount;
+
+    userData.coins += totalEarned;
+    userData.crypto.easycoins -= amount;
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor('#27ae60')
+      .setTitle('₿ EasyCoin Vendido')
+      .setDescription(`**${interaction.user.username}** vendió criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin`)
+      .addFields(
+        { name: '💰 Total Recibido', value: `${totalEarned.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '₿ EasyCoins restantes', value: `${userData.crypto.easycoins} ₿`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  // MERCADO CRIPTO
+  if (interaction.isChatInputCommand() && interaction.commandName === 'mercado-cripto') {
+    const userData = getUser(interaction.user.id);
+    const price = getCryptoPrice();
+    const portfolioValue = userData.crypto.easycoins * price;
+
+    // Simular gráfica de tendencia
+    const trend = [];
+    for (let i = 5; i >= 0; i--) {
+      const pastSeed = (new Date().getHours() * 60 + new Date().getMinutes()) - i * 10;
+      const pastPrice = Math.floor(50 + (Math.abs(Math.sin(pastSeed) * 10000) % 100) * 5);
+      trend.push(pastPrice);
+    }
+    
+    const trendEmoji = trend[5] > trend[0] ? '📈' : trend[5] < trend[0] ? '📉' : '➡️';
+    const trendText = trend.map((p, i) => i === 5 ? `**${p}**` : p).join(' → ');
+
+    const embed = new EmbedBuilder()
+      .setColor('#16a085')
+      .setTitle('₿ Mercado de EasyCoin')
+      .setDescription(`**Precio actual:** ${price.toLocaleString()} 🪙 por EasyCoin ${trendEmoji}\n\n**Tendencia (últimos 60 min):**\n${trendText}`)
+      .addFields(
+        { name: '₿ Tus EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true },
+        { name: '💰 Valor del Portafolio', value: `${portfolioValue.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Balance en Wallet', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: '⚠️ Alta volatilidad - El precio cambia cada minuto' })
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
   }
 
   // ========== GUÍA PARA USUARIOS ==========
