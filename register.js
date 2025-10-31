@@ -897,6 +897,10 @@ const commands = [
         min_value: 100
       }
     ]
+  },
+  {
+    name: 'anuncio',
+    description: '📢 [STAFF] Crear anuncio personalizado con embed'
   }
 ];
 

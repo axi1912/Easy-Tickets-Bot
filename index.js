@@ -6421,6 +6421,178 @@ client.on('interactionCreate', async interaction => {
     await interaction.channel.send({ embeds: [embed9] });
   }
 
+  // ========== FASE 6: SISTEMA DE ANUNCIOS PARA STAFF ==========
+  
+  if (interaction.isChatInputCommand() && interaction.commandName === 'anuncio') {
+    const staffRoleIds = getStaffRoles();
+    const hasStaffRole = interaction.member.roles.cache.some(role => staffRoleIds.includes(role.id));
+    
+    if (!hasStaffRole && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ Este comando es solo para el Staff.', flags: 64 });
+    }
+
+    // Mostrar modal para crear anuncio
+    const modal = new ModalBuilder()
+      .setCustomId(`announcement_modal_${interaction.user.id}_${Date.now()}`)
+      .setTitle('📢 Crear Anuncio');
+
+    const titleInput = new TextInputBuilder()
+      .setCustomId('announcement_title')
+      .setLabel('Título del Anuncio')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Ej: ¡Nuevo Torneo!')
+      .setRequired(true)
+      .setMaxLength(100);
+
+    const descInput = new TextInputBuilder()
+      .setCustomId('announcement_description')
+      .setLabel('Descripción')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Escribe el contenido del anuncio...')
+      .setRequired(true)
+      .setMaxLength(2000);
+
+    const colorInput = new TextInputBuilder()
+      .setCustomId('announcement_color')
+      .setLabel('Color (hex sin #, ej: 2ecc71)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('2ecc71')
+      .setRequired(false)
+      .setMaxLength(6);
+
+    const imageInput = new TextInputBuilder()
+      .setCustomId('announcement_image')
+      .setLabel('URL de Imagen (opcional)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('https://example.com/image.png')
+      .setRequired(false);
+
+    const footerInput = new TextInputBuilder()
+      .setCustomId('announcement_footer')
+      .setLabel('Pie de Página (opcional)')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Ej: Ea$y Esports Staff')
+      .setRequired(false)
+      .setMaxLength(100);
+
+    const row1 = new ActionRowBuilder().addComponents(titleInput);
+    const row2 = new ActionRowBuilder().addComponents(descInput);
+    const row3 = new ActionRowBuilder().addComponents(colorInput);
+    const row4 = new ActionRowBuilder().addComponents(imageInput);
+    const row5 = new ActionRowBuilder().addComponents(footerInput);
+
+    modal.addComponents(row1, row2, row3, row4, row5);
+
+    await interaction.showModal(modal);
+  }
+
+  // Procesar modal de anuncio
+  if (interaction.isModalSubmit() && interaction.customId.startsWith('announcement_modal_')) {
+    const title = interaction.fields.getTextInputValue('announcement_title');
+    const description = interaction.fields.getTextInputValue('announcement_description');
+    const colorInput = interaction.fields.getTextInputValue('announcement_color') || '3498db';
+    const imageUrl = interaction.fields.getTextInputValue('announcement_image') || null;
+    const footer = interaction.fields.getTextInputValue('announcement_footer') || null;
+
+    // Validar color hex
+    const color = colorInput.match(/^[0-9A-Fa-f]{6}$/) ? `#${colorInput}` : '#3498db';
+
+    // Crear preview
+    const previewEmbed = new EmbedBuilder()
+      .setColor(color)
+      .setTitle(title)
+      .setDescription(description)
+      .setTimestamp();
+
+    if (imageUrl) {
+      try {
+        previewEmbed.setImage(imageUrl);
+      } catch (e) {
+        // URL inválida, ignorar
+      }
+    }
+
+    if (footer) {
+      previewEmbed.setFooter({ text: footer });
+    }
+
+    // Botones de confirmación
+    const confirmButtons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`announcement_send_${interaction.user.id}_${Date.now()}`)
+        .setLabel('📢 Enviar Anuncio')
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`announcement_cancel_${interaction.user.id}`)
+        .setLabel('❌ Cancelar')
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    // Guardar datos del embed en activeGames temporalmente
+    const announcementId = `announcement_${interaction.user.id}_${Date.now()}`;
+    activeGames.set(announcementId, {
+      embed: previewEmbed,
+      userId: interaction.user.id
+    });
+
+    await interaction.reply({ 
+      content: '📢 **Vista previa del anuncio:**\n¿Deseas enviarlo al canal actual?', 
+      embeds: [previewEmbed], 
+      components: [confirmButtons],
+      flags: 64 
+    });
+
+    // Auto-delete después de 2 minutos
+    setTimeout(() => {
+      if (activeGames.has(announcementId)) {
+        activeGames.delete(announcementId);
+      }
+    }, 120000);
+  }
+
+  // Enviar o cancelar anuncio
+  if (interaction.isButton() && interaction.customId.startsWith('announcement_')) {
+    const action = interaction.customId.split('_')[1];
+    
+    if (action === 'cancel') {
+      await interaction.update({ 
+        content: '❌ Anuncio cancelado.', 
+        embeds: [], 
+        components: [] 
+      });
+      return;
+    }
+
+    if (action === 'send') {
+      // Buscar el embed guardado
+      let announcementData = null;
+      for (const [key, value] of activeGames.entries()) {
+        if (key.startsWith('announcement_') && value.userId === interaction.user.id) {
+          announcementData = value;
+          activeGames.delete(key);
+          break;
+        }
+      }
+
+      if (!announcementData) {
+        return interaction.update({ 
+          content: '❌ El anuncio expiró. Intenta de nuevo.', 
+          embeds: [], 
+          components: [] 
+        });
+      }
+
+      // Enviar el anuncio al canal
+      await interaction.channel.send({ embeds: [announcementData.embed] });
+
+      await interaction.update({ 
+        content: '✅ ¡Anuncio enviado exitosamente!', 
+        embeds: [], 
+        components: [] 
+      });
+    }
+  }
+
   // ========== GUÍA PARA STAFF ==========
   if (interaction.isChatInputCommand() && interaction.commandName === 'guia-staff') {
     const staffRoleIds = getStaffRoles();
