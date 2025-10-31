@@ -1280,6 +1280,9 @@ client.on('interactionCreate', async interaction => {
     const taskNum = parseInt(parts[0].replace('work_task', ''));
     const [, userId, jobId, shift, correctBonus, tasksCompleted] = parts.slice(1);
     
+    console.log(`🔍 Tarea presionada: ${interaction.customId}`);
+    console.log(`📋 TaskNum: ${taskNum}, JobId: ${jobId}`);
+    
     if (interaction.user.id !== userId) {
       return interaction.reply({ content: '❌ Este botón no es para ti.', flags: 64 });
     }
@@ -1354,6 +1357,8 @@ client.on('interactionCreate', async interaction => {
     };
 
     const taskQ = taskQuestions[jobId] ? taskQuestions[jobId][taskNum - 1] : null;
+    
+    console.log(`❓ Pregunta encontrada:`, taskQ);
 
     // Mostrar pregunta de esta tarea
     if (taskQ) {
