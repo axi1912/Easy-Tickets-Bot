@@ -3452,6 +3452,716 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
   }
 
+  // ========== NUEVOS JUEGOS - FASE 1 ==========
+  
+  // Funciones auxiliares para Bingo
+  function generateBingoCard() {
+    const card = [];
+    const columns = [
+      Array.from({ length: 15 }, (_, i) => i + 1),   // B: 1-15
+      Array.from({ length: 15 }, (_, i) => i + 16),  // I: 16-30
+      Array.from({ length: 15 }, (_, i) => i + 31),  // N: 31-45
+      Array.from({ length: 15 }, (_, i) => i + 46),  // G: 46-60
+      Array.from({ length: 15 }, (_, i) => i + 61)   // O: 61-75
+    ];
+
+    for (let col of columns) {
+      const shuffled = col.sort(() => Math.random() - 0.5);
+      card.push(shuffled.slice(0, 5));
+    }
+
+    card[2][2] = 'FREE'; // Centro gratis
+    return card;
+  }
+
+  async function startBingoGame(interaction, gameId) {
+    const game = activeGames.get(gameId);
+    if (!game || game.status !== 'waiting') return;
+
+    game.status = 'playing';
+    game.drawnNumbers = [];
+    game.allNumbers = Array.from({ length: 75 }, (_, i) => i + 1);
+
+    const embed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('🎰 ¡Bingo en Progreso!')
+      .setDescription(`🎱 **Sacando números...**\n\n👥 Jugadores: ${game.players.length}\n🏆 Pozo: **${game.pot.toLocaleString()}** 🪙\n\n*El primer jugador en completar una línea gana!*`)
+      .setFooter({ text: 'Simulando partida...' });
+
+    await interaction.channel.send({ embeds: [embed] });
+
+    // Simular partida (sacar números hasta que alguien gane)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    let winner = null;
+    let drawCount = 0;
+
+    while (!winner && drawCount < 75) {
+      // Sacar número
+      const randomIndex = Math.floor(Math.random() * game.allNumbers.length);
+      const drawnNumber = game.allNumbers.splice(randomIndex, 1)[0];
+      game.drawnNumbers.push(drawnNumber);
+      drawCount++;
+
+      // Verificar si alguien ganó
+      for (const player of game.players) {
+        if (checkBingoWin(player.card, game.drawnNumbers)) {
+          winner = player;
+          break;
+        }
+      }
+    }
+
+    if (winner) {
+      const winnerData = getUser(winner.id);
+      winnerData.coins += game.pot;
+      winnerData.stats.gamesPlayed += 1;
+      winnerData.stats.gamesWon += 1;
+      winnerData.stats.totalWinnings += game.pot;
+      updateUser(winner.id, winnerData);
+
+      // Actualizar stats de perdedores
+      for (const player of game.players) {
+        if (player.id !== winner.id) {
+          const loserData = getUser(player.id);
+          loserData.stats.gamesPlayed += 1;
+          loserData.stats.gamesLost += 1;
+          loserData.stats.totalLosses += player.bet;
+          updateUser(player.id, loserData);
+        }
+      }
+
+      const winEmbed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle('🎉 ¡BINGO!')
+        .setDescription(`🏆 **${winner.name}** ganó el Bingo!\n\n💰 **Premio:** ${game.pot.toLocaleString()} 🪙\n🎱 **Números sacados:** ${drawCount}\n👥 **Jugadores:** ${game.players.length}`)
+        .addFields({ name: '🎯 Números ganadores', value: game.drawnNumbers.slice(-10).join(', ') + '...' })
+        .setFooter({ text: 'Ea$y Esports Bingo' })
+        .setTimestamp();
+
+      await interaction.channel.send({ embeds: [winEmbed] });
+    }
+
+    activeGames.delete(gameId);
+  }
+
+  function checkBingoWin(card, drawnNumbers) {
+    // Marcar números en el cartón
+    const marked = card.map(col => 
+      col.map(num => num === 'FREE' || drawnNumbers.includes(num))
+    );
+
+    // Verificar líneas horizontales
+    for (let row = 0; row < 5; row++) {
+      if (marked.every(col => col[row])) return true;
+    }
+
+    // Verificar líneas verticales
+    for (let col = 0; col < 5; col++) {
+      if (marked[col].every(cell => cell)) return true;
+    }
+
+    // Verificar diagonales
+    if (marked[0][0] && marked[1][1] && marked[2][2] && marked[3][3] && marked[4][4]) return true;
+    if (marked[0][4] && marked[1][3] && marked[2][2] && marked[3][1] && marked[4][0]) return true;
+
+    return false;
+  }
+
+  // SLOTS - Máquina Tragamonedas
+  if (interaction.isChatInputCommand() && interaction.commandName === 'slots') {
+    const apuesta = interaction.options.getInteger('apuesta');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.coins < apuesta) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `slots_${interaction.user.id}_${Date.now()}`;
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, bet: apuesta });
+
+    try {
+      userData.coins -= apuesta;
+      updateUser(interaction.user.id, userData);
+
+      const slots = ['🍒', '🍋', '🍊', '🍇', '💎', '7️⃣', '⭐'];
+      
+      // Animación de rodillos
+      const embed1 = new EmbedBuilder()
+        .setColor('#f39c12')
+        .setTitle('🎰 Máquina Tragamonedas')
+        .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙\n\n🎰 [ ? | ? | ? ]\n\n*Girando...*`)
+        .setFooter({ text: 'Ea$y Esports Casino' });
+
+      await interaction.reply({ embeds: [embed1] });
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Resultado
+      const reel1 = slots[Math.floor(Math.random() * slots.length)];
+      const reel2 = slots[Math.floor(Math.random() * slots.length)];
+      const reel3 = slots[Math.floor(Math.random() * slots.length)];
+
+      let winnings = 0;
+      let resultText = '';
+
+      if (reel1 === reel2 && reel2 === reel3) {
+        // Jackpot!
+        if (reel1 === '💎') {
+          winnings = apuesta * 50;
+          resultText = '💎 **¡MEGA JACKPOT!** 💎';
+        } else if (reel1 === '7️⃣') {
+          winnings = apuesta * 25;
+          resultText = '🎉 **¡JACKPOT 777!** 🎉';
+        } else if (reel1 === '⭐') {
+          winnings = apuesta * 15;
+          resultText = '⭐ **¡SUPER PREMIO!** ⭐';
+        } else {
+          winnings = apuesta * 10;
+          resultText = '🎊 **¡TRES IGUALES!** 🎊';
+        }
+      } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
+        // Dos iguales
+        winnings = Math.floor(apuesta * 2);
+        resultText = '✨ **¡Dos iguales!**';
+      } else {
+        // Perdiste
+        resultText = '💥 **Sin suerte esta vez...**';
+      }
+
+      userData.coins += winnings;
+      userData.stats.gamesPlayed += 1;
+      if (winnings > 0) {
+        userData.stats.gamesWon += 1;
+        userData.stats.totalWinnings += winnings;
+      } else {
+        userData.stats.gamesLost += 1;
+        userData.stats.totalLosses += apuesta;
+      }
+      updateUser(interaction.user.id, userData);
+
+      const embed2 = new EmbedBuilder()
+        .setColor(winnings > 0 ? '#2ecc71' : '#e74c3c')
+        .setTitle('🎰 Máquina Tragamonedas')
+        .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙\n\n🎰 [ ${reel1} | ${reel2} | ${reel3} ]\n\n${resultText}`)
+        .addFields(
+          { name: winnings > 0 ? '💰 Ganaste' : '💸 Perdiste', value: `${winnings > 0 ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
+          { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: 'Ea$y Esports Casino' })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed2] });
+
+    } catch (error) {
+      console.error('Error en slots:', error);
+      userData.coins += apuesta;
+      updateUser(interaction.user.id, userData);
+      await interaction.editReply({ content: '❌ Error en el juego. Apuesta devuelta.' });
+    } finally {
+      activeGames.delete(gameId);
+    }
+  }
+
+  // RACE - Carreras de Emojis
+  if (interaction.isChatInputCommand() && interaction.commandName === 'race') {
+    const apuesta = interaction.options.getInteger('apuesta');
+    const corredor = interaction.options.getInteger('corredor');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.coins < apuesta) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `race_${interaction.user.id}_${Date.now()}`;
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, bet: apuesta });
+
+    try {
+      userData.coins -= apuesta;
+      updateUser(interaction.user.id, userData);
+
+      const racers = ['🐎', '🦄', '🐕', '🐆'];
+      const racerNames = ['Caballo', 'Unicornio', 'Perro', 'Guepardo'];
+      
+      const embed1 = new EmbedBuilder()
+        .setColor('#3498db')
+        .setTitle('🏇 Carrera de Emojis')
+        .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙 al **${racers[corredor - 1]} ${racerNames[corredor - 1]}**\n\n🏁 **PREPARADOS...**\n\n1️⃣ ${racers[0]} ▬▬▬▬▬▬▬▬▬🏁\n2️⃣ ${racers[1]} ▬▬▬▬▬▬▬▬▬🏁\n3️⃣ ${racers[2]} ▬▬▬▬▬▬▬▬▬🏁\n4️⃣ ${racers[3]} ▬▬▬▬▬▬▬▬▬🏁`)
+        .setFooter({ text: 'La carrera está por comenzar...' });
+
+      await interaction.reply({ embeds: [embed1] });
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Simular carrera
+      const positions = [0, 0, 0, 0];
+      for (let i = 0; i < 9; i++) {
+        positions[Math.floor(Math.random() * 4)] += 1;
+      }
+
+      const winner = positions.indexOf(Math.max(...positions)) + 1;
+      const won = winner === corredor;
+
+      const track = positions.map((pos, idx) => {
+        const progress = '▬'.repeat(9 - pos) + racers[idx] + '█'.repeat(pos);
+        return `${idx + 1}️⃣ ${progress}🏁`;
+      }).join('\n');
+
+      const winnings = won ? apuesta * 3 : 0;
+      userData.coins += winnings;
+      userData.stats.gamesPlayed += 1;
+      if (won) {
+        userData.stats.gamesWon += 1;
+        userData.stats.totalWinnings += winnings;
+      } else {
+        userData.stats.gamesLost += 1;
+        userData.stats.totalLosses += apuesta;
+      }
+      updateUser(interaction.user.id, userData);
+
+      const embed2 = new EmbedBuilder()
+        .setColor(won ? '#2ecc71' : '#e74c3c')
+        .setTitle('🏇 Carrera de Emojis - ¡Resultado!')
+        .setDescription(`**${interaction.user.username}** apostó al **${racers[corredor - 1]} ${racerNames[corredor - 1]}**\n\n${track}\n\n🏆 **Ganador: ${racers[winner - 1]} ${racerNames[winner - 1]}**`)
+        .addFields(
+          { name: won ? '💰 ¡Ganaste!' : '💸 Perdiste', value: `${won ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
+          { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: 'Ea$y Esports Racing' })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed2] });
+
+    } catch (error) {
+      console.error('Error en race:', error);
+      userData.coins += apuesta;
+      updateUser(interaction.user.id, userData);
+      await interaction.editReply({ content: '❌ Error en el juego. Apuesta devuelta.' });
+    } finally {
+      activeGames.delete(gameId);
+    }
+  }
+
+  // RUSSIAN ROULETTE - Ruleta Rusa
+  if (interaction.isChatInputCommand() && interaction.commandName === 'russianroulette') {
+    const apuesta = interaction.options.getInteger('apuesta');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.coins < apuesta) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `rr_${interaction.user.id}_${Date.now()}`;
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, bet: apuesta });
+
+    try {
+      userData.coins -= apuesta;
+      updateUser(interaction.user.id, userData);
+
+      const embed1 = new EmbedBuilder()
+        .setColor('#e74c3c')
+        .setTitle('🎪 Ruleta Rusa')
+        .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙\n\n🔫 Girando el tambor...\n\n⚠️ **30% de perder TODO**\n💰 **70% de ganar x5**`)
+        .setFooter({ text: '¿Tendrás suerte?' });
+
+      await interaction.reply({ embeds: [embed1] });
+      await new Promise(resolve => setTimeout(resolve, 2500));
+
+      const survived = Math.random() > 0.3; // 70% de ganar
+      const winnings = survived ? apuesta * 5 : 0;
+
+      userData.coins += winnings;
+      userData.stats.gamesPlayed += 1;
+      if (survived) {
+        userData.stats.gamesWon += 1;
+        userData.stats.totalWinnings += winnings;
+      } else {
+        userData.stats.gamesLost += 1;
+        userData.stats.totalLosses += apuesta;
+      }
+      updateUser(interaction.user.id, userData);
+
+      const embed2 = new EmbedBuilder()
+        .setColor(survived ? '#2ecc71' : '#e74c3c')
+        .setTitle('🎪 Ruleta Rusa')
+        .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙\n\n${survived ? '✅ **¡CLICK!** Sobreviviste 🎉' : '💥 **¡BANG!** Perdiste todo 💀'}`)
+        .addFields(
+          { name: survived ? '💰 Ganaste' : '💸 Perdiste', value: `${survived ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
+          { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+        )
+        .setFooter({ text: 'Alto riesgo, alta recompensa' })
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed2] });
+
+    } catch (error) {
+      console.error('Error en russian roulette:', error);
+      userData.coins += apuesta;
+      updateUser(interaction.user.id, userData);
+      await interaction.editReply({ content: '❌ Error en el juego. Apuesta devuelta.' });
+    } finally {
+      activeGames.delete(gameId);
+    }
+  }
+
+  // TRIVIA - Preguntas de Cultura General
+  if (interaction.isChatInputCommand() && interaction.commandName === 'trivia') {
+    const dificultad = interaction.options.getString('dificultad');
+    const userData = getUser(interaction.user.id);
+
+    const costs = { facil: 50, media: 150, dificil: 300 };
+    const prizes = { facil: 150, media: 500, dificil: 1200 };
+    const cost = costs[dificultad];
+    const prize = prizes[dificultad];
+
+    if (userData.coins < cost) {
+      return interaction.reply({ 
+        content: `❌ Necesitas **${cost}** 🪙 para jugar. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `trivia_${interaction.user.id}_${Date.now()}`;
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    }
+
+    activeGames.set(gameId, { userId: interaction.user.id, cost });
+
+    try {
+      userData.coins -= cost;
+      updateUser(interaction.user.id, userData);
+
+      // Banco de preguntas
+      const triviaQuestions = {
+        facil: [
+          { q: '🌍 ¿Cuál es el país más grande del mundo?', a: ['Rusia', 'China', 'Canadá'], correct: 0 },
+          { q: '🎨 ¿De qué color es el sol?', a: ['Amarillo', 'Rojo', 'Blanco'], correct: 2 },
+          { q: '🐘 ¿Cuál es el animal más grande de la tierra?', a: ['Elefante', 'Ballena azul', 'Jirafa'], correct: 1 },
+          { q: '🍕 ¿De dónde es originaria la pizza?', a: ['Italia', 'Francia', 'España'], correct: 0 },
+          { q: '⚽ ¿Cuántos jugadores hay en un equipo de fútbol?', a: ['11', '10', '12'], correct: 0 }
+        ],
+        media: [
+          { q: '🏛️ ¿En qué año cayó el muro de Berlín?', a: ['1989', '1991', '1985'], correct: 0 },
+          { q: '🔬 ¿Qué elemento tiene el símbolo "Au"?', a: ['Oro', 'Plata', 'Platino'], correct: 0 },
+          { q: '🌊 ¿Cuál es el océano más profundo?', a: ['Pacífico', 'Atlántico', 'Índico'], correct: 0 },
+          { q: '🎬 ¿Quién dirigió "Titanic"?', a: ['James Cameron', 'Steven Spielberg', 'Martin Scorsese'], correct: 0 },
+          { q: '🗼 ¿En qué ciudad está la Torre Eiffel?', a: ['París', 'Londres', 'Roma'], correct: 0 }
+        ],
+        dificil: [
+          { q: '🧬 ¿Cuántos cromosomas tiene el ser humano?', a: ['46', '48', '44'], correct: 0 },
+          { q: '🎵 ¿Quién compuso "Las Cuatro Estaciones"?', a: ['Vivaldi', 'Mozart', 'Bach'], correct: 0 },
+          { q: '🏛️ ¿Qué emperador romano legalizó el cristianismo?', a: ['Constantino', 'Nerón', 'Augusto'], correct: 0 },
+          { q: '🔭 ¿Qué planeta tiene la mayor gravedad?', a: ['Júpiter', 'Saturno', 'Neptuno'], correct: 0 },
+          { q: '📚 ¿Quién escribió "1984"?', a: ['George Orwell', 'Aldous Huxley', 'Ray Bradbury'], correct: 0 }
+        ]
+      };
+
+      const questions = triviaQuestions[dificultad];
+      const question = questions[Math.floor(Math.random() * questions.length)];
+
+      const answerButtons = new ActionRowBuilder().addComponents(
+        ...question.a.map((answer, idx) => 
+          new ButtonBuilder()
+            .setCustomId(`trivia_answer_${gameId}_${idx}_${question.correct}`)
+            .setLabel(answer)
+            .setStyle(ButtonStyle.Secondary)
+        )
+      );
+
+      const difficultyEmoji = { facil: '😊', media: '🤔', dificil: '🔥' };
+
+      const embed = new EmbedBuilder()
+        .setColor('#9b59b6')
+        .setTitle(`🎨 Trivia ${difficultyEmoji[dificultad]} ${dificultad.toUpperCase()}`)
+        .setDescription(`**${interaction.user.username}** pagó **${cost}** 🪙\n\n${question.q}`)
+        .addFields({ name: '💰 Premio', value: `${prize.toLocaleString()} 🪙`, inline: true })
+        .setFooter({ text: 'Tienes 30 segundos para responder' });
+
+      await interaction.reply({ embeds: [embed], components: [answerButtons] });
+
+      // Timeout de 30 segundos
+      setTimeout(() => {
+        if (activeGames.has(gameId)) {
+          activeGames.delete(gameId);
+          interaction.editReply({ content: '⏰ Se acabó el tiempo. Perdiste la apuesta.', embeds: [], components: [] }).catch(() => {});
+        }
+      }, 30000);
+
+    } catch (error) {
+      console.error('Error en trivia:', error);
+      userData.coins += cost;
+      updateUser(interaction.user.id, userData);
+      await interaction.editReply({ content: '❌ Error en el juego. Apuesta devuelta.' });
+      activeGames.delete(gameId);
+    }
+  }
+
+  // BINGO - Juego Multijugador
+  if (interaction.isChatInputCommand() && interaction.commandName === 'bingo') {
+    const apuesta = interaction.options.getInteger('apuesta');
+    const userData = getUser(interaction.user.id);
+
+    if (userData.coins < apuesta) {
+      return interaction.reply({ 
+        content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
+        flags: 64 
+      });
+    }
+
+    const gameId = `bingo_${interaction.guild.id}_${Date.now()}`;
+    
+    // Buscar sala de bingo activa o crear una nueva
+    let bingoRoom = null;
+    for (const [key, game] of activeGames.entries()) {
+      if (key.startsWith('bingo_') && game.status === 'waiting' && game.guildId === interaction.guild.id) {
+        bingoRoom = key;
+        break;
+      }
+    }
+
+    if (!bingoRoom) {
+      // Crear nueva sala
+      activeGames.set(gameId, {
+        guildId: interaction.guild.id,
+        status: 'waiting',
+        players: [{ id: interaction.user.id, name: interaction.user.username, bet: apuesta, card: generateBingoCard() }],
+        pot: apuesta,
+        startTime: Date.now()
+      });
+
+      userData.coins -= apuesta;
+      updateUser(interaction.user.id, userData);
+
+      const joinButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`bingo_join_${gameId}`)
+          .setLabel('🎟️ Unirse al Bingo')
+          .setStyle(ButtonStyle.Success)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#e91e63')
+        .setTitle('🎰 Sala de Bingo Abierta')
+        .setDescription(`**${interaction.user.username}** inició una partida de Bingo!\n\n💰 **Apuesta por jugador:** ${apuesta.toLocaleString()} 🪙\n👥 **Jugadores:** 1/10\n🏆 **Pozo acumulado:** ${apuesta.toLocaleString()} 🪙\n\n*Se requieren mínimo 3 jugadores*\n*El juego iniciará automáticamente a los 60 segundos*`)
+        .setFooter({ text: 'Haz click abajo para unirte' });
+
+      await interaction.reply({ embeds: [embed], components: [joinButton] });
+
+      // Auto-start después de 60 segundos si hay suficientes jugadores
+      setTimeout(async () => {
+        const game = activeGames.get(gameId);
+        if (game && game.status === 'waiting') {
+          if (game.players.length >= 3) {
+            await startBingoGame(interaction, gameId);
+          } else {
+            // Cancelar y devolver apuestas
+            for (const player of game.players) {
+              const pData = getUser(player.id);
+              pData.coins += player.bet;
+              updateUser(player.id, pData);
+            }
+            activeGames.delete(gameId);
+            await interaction.editReply({ 
+              content: '❌ Bingo cancelado: no se alcanzó el mínimo de 3 jugadores. Apuestas devueltas.', 
+              embeds: [], 
+              components: [] 
+            });
+          }
+        }
+      }, 60000);
+
+    } else {
+      // Unirse a sala existente
+      const game = activeGames.get(bingoRoom);
+      
+      if (game.players.some(p => p.id === interaction.user.id)) {
+        return interaction.reply({ content: '❌ Ya estás en esta partida de Bingo.', flags: 64 });
+      }
+
+      if (game.players.length >= 10) {
+        return interaction.reply({ content: '❌ Esta sala está llena. Intenta crear una nueva.', flags: 64 });
+      }
+
+      const requiredBet = game.players[0].bet;
+      if (apuesta !== requiredBet) {
+        return interaction.reply({ 
+          content: `❌ La apuesta de esta sala es **${requiredBet.toLocaleString()}** 🪙`, 
+          flags: 64 
+        });
+      }
+
+      userData.coins -= apuesta;
+      updateUser(interaction.user.id, userData);
+
+      game.players.push({ 
+        id: interaction.user.id, 
+        name: interaction.user.username, 
+        bet: apuesta, 
+        card: generateBingoCard() 
+      });
+      game.pot += apuesta;
+
+      const joinButton = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`bingo_join_${bingoRoom}`)
+          .setLabel('🎟️ Unirse al Bingo')
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(game.players.length >= 10)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#e91e63')
+        .setTitle('🎰 Sala de Bingo')
+        .setDescription(`👥 **Jugadores:** ${game.players.length}/10\n💰 **Apuesta:** ${requiredBet.toLocaleString()} 🪙\n🏆 **Pozo:** ${game.pot.toLocaleString()} 🪙\n\n**Jugadores unidos:**\n${game.players.map(p => `• ${p.name}`).join('\n')}\n\n*Se requieren mínimo 3 jugadores*`)
+        .setFooter({ text: `${interaction.user.username} se unió a la partida!` });
+
+      await interaction.reply({ content: `✅ Te uniste al Bingo! Apuesta: **${apuesta.toLocaleString()}** 🪙`, flags: 64 });
+      
+      // Actualizar mensaje original
+      const originalMessage = await interaction.channel.messages.fetch(interaction.channel.lastMessageId).catch(() => null);
+      if (originalMessage) {
+        await originalMessage.edit({ embeds: [embed], components: [joinButton] });
+      }
+
+      // Si hay 10 jugadores, iniciar inmediatamente
+      if (game.players.length >= 10) {
+        await startBingoGame(interaction, bingoRoom);
+      }
+    }
+  }
+
+  // Botón Unirse a Bingo
+  if (interaction.isButton() && interaction.customId.startsWith('bingo_join_')) {
+    const gameId = interaction.customId.replace('bingo_join_', '');
+    const game = activeGames.get(gameId);
+
+    if (!game || game.status !== 'waiting') {
+      return interaction.reply({ content: '❌ Esta sala ya no está disponible.', flags: 64 });
+    }
+
+    if (game.players.some(p => p.id === interaction.user.id)) {
+      return interaction.reply({ content: '❌ Ya estás en esta partida.', flags: 64 });
+    }
+
+    if (game.players.length >= 10) {
+      return interaction.reply({ content: '❌ Esta sala está llena.', flags: 64 });
+    }
+
+    const userData = getUser(interaction.user.id);
+    const requiredBet = game.players[0].bet;
+
+    if (userData.coins < requiredBet) {
+      return interaction.reply({ 
+        content: `❌ Necesitas **${requiredBet.toLocaleString()}** 🪙 para unirte.`, 
+        flags: 64 
+      });
+    }
+
+    userData.coins -= requiredBet;
+    updateUser(interaction.user.id, userData);
+
+    game.players.push({ 
+      id: interaction.user.id, 
+      name: interaction.user.username, 
+      bet: requiredBet, 
+      card: generateBingoCard() 
+    });
+    game.pot += requiredBet;
+
+    const joinButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`bingo_join_${gameId}`)
+        .setLabel('🎟️ Unirse al Bingo')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(game.players.length >= 10)
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor('#e91e63')
+      .setTitle('🎰 Sala de Bingo')
+      .setDescription(`👥 **Jugadores:** ${game.players.length}/10\n💰 **Apuesta:** ${requiredBet.toLocaleString()} 🪙\n🏆 **Pozo:** ${game.pot.toLocaleString()} 🪙\n\n**Jugadores unidos:**\n${game.players.map(p => `• ${p.name}`).join('\n')}\n\n*Se requieren mínimo 3 jugadores*`)
+      .setFooter({ text: `${interaction.user.username} se unió!` });
+
+    await interaction.update({ embeds: [embed], components: [joinButton] });
+
+    if (game.players.length >= 10) {
+      await startBingoGame(interaction, gameId);
+    }
+  }
+
+  // Respuesta de Trivia
+  if (interaction.isButton() && interaction.customId.startsWith('trivia_answer_')) {
+    const parts = interaction.customId.split('_');
+    const gameId = parts[2];
+    const selectedAnswer = parseInt(parts[3]);
+    const correctAnswer = parseInt(parts[4]);
+    const game = activeGames.get(gameId);
+
+    if (!game) {
+      return interaction.reply({ content: '❌ Este juego ya expiró.', flags: 64 });
+    }
+
+    if (interaction.user.id !== game.userId) {
+      return interaction.reply({ content: '❌ Esta pregunta no es para ti.', flags: 64 });
+    }
+
+    activeGames.delete(gameId);
+
+    const userData = getUser(interaction.user.id);
+    const won = selectedAnswer === correctAnswer;
+    
+    // Determinar premio basado en dificultad original
+    const dificultad = game.cost === 50 ? 'facil' : game.cost === 150 ? 'media' : 'dificil';
+    const prizes = { facil: 150, media: 500, dificil: 1200 };
+    const prize = prizes[dificultad];
+    
+    const winnings = won ? prize : 0;
+
+    userData.coins += winnings;
+    userData.stats.gamesPlayed += 1;
+    if (won) {
+      userData.stats.gamesWon += 1;
+      userData.stats.totalWinnings += winnings;
+    } else {
+      userData.stats.gamesLost += 1;
+      userData.stats.totalLosses += game.cost;
+    }
+    updateUser(interaction.user.id, userData);
+
+    const embed = new EmbedBuilder()
+      .setColor(won ? '#2ecc71' : '#e74c3c')
+      .setTitle(won ? '✅ ¡Correcto!' : '❌ Incorrecto')
+      .setDescription(won ? `¡Excelente ${interaction.user.username}! Respondiste correctamente.` : `Lo siento ${interaction.user.username}, esa no era la respuesta correcta.`)
+      .addFields(
+        { name: won ? '💰 Ganaste' : '💸 Perdiste', value: `${won ? '+' : '-'}${(won ? winnings - game.cost : game.cost).toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: 'Ea$y Esports Trivia' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
   // ========== GUÍA PARA USUARIOS ==========
   if (interaction.isChatInputCommand() && interaction.commandName === 'guia-usuarios') {
     await interaction.reply('📖 **Enviando guía completa de comandos para usuarios...**');

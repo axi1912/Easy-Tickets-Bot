@@ -383,6 +383,83 @@ const commands = [
         ]
       }
     ]
+  },
+  {
+    name: 'slots',
+    description: '🎰 Juega a la máquina tragamonedas',
+    options: [
+      {
+        name: 'apuesta',
+        description: 'Cantidad de monedas a apostar',
+        type: 4,
+        required: true,
+        min_value: 10
+      }
+    ]
+  },
+  {
+    name: 'race',
+    description: '🏇 Apuesta en carreras de emojis',
+    options: [
+      {
+        name: 'apuesta',
+        description: 'Cantidad de monedas a apostar',
+        type: 4,
+        required: true,
+        min_value: 10
+      },
+      {
+        name: 'corredor',
+        description: 'Elige tu corredor (1-4)',
+        type: 4,
+        required: true,
+        min_value: 1,
+        max_value: 4
+      }
+    ]
+  },
+  {
+    name: 'bingo',
+    description: '🎯 Juega al bingo (Se necesitan 3+ jugadores)',
+    options: [
+      {
+        name: 'apuesta',
+        description: 'Cantidad de monedas para entrar',
+        type: 4,
+        required: true,
+        min_value: 50
+      }
+    ]
+  },
+  {
+    name: 'russianroulette',
+    description: '🎪 Ruleta rusa - Alto riesgo, alta recompensa',
+    options: [
+      {
+        name: 'apuesta',
+        description: 'Cantidad de monedas a apostar',
+        type: 4,
+        required: true,
+        min_value: 100
+      }
+    ]
+  },
+  {
+    name: 'trivia',
+    description: '🎨 Responde preguntas de cultura general por premios',
+    options: [
+      {
+        name: 'dificultad',
+        description: 'Nivel de dificultad',
+        type: 3,
+        required: true,
+        choices: [
+          { name: '😊 Fácil (50 monedas)', value: 'facil' },
+          { name: '🤔 Media (150 monedas)', value: 'media' },
+          { name: '🔥 Difícil (300 monedas)', value: 'dificil' }
+        ]
+      }
+    ]
   }
 ];
 
