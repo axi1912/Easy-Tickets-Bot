@@ -618,12 +618,13 @@ client.on('messageCreate', async (message) => {
 
   // Sistema de respuesta automática con IA en tickets
   if (ticket && ticket.status === 'open' && aiModel) {
-    // Solo responder si el mensaje es del usuario (no del staff)
+    // Solo responder a usuarios normales (NO a staff)
     const staffRoles = getStaffRoles();
     const isStaff = message.member?.roles?.cache?.some(role => staffRoles.includes(role.id)) || 
                     message.member?.permissions?.has(PermissionFlagsBits.Administrator);
     
-    if (isStaff) return; // No responder si es staff
+    // Si es staff, no responder
+    if (isStaff) return;
 
     try {
       // Indicar que está escribiendo
