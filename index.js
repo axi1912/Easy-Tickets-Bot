@@ -486,6 +486,20 @@ function updateUser(userId, data) {
   saveEconomy(economy);
 }
 
+// Función para agregar XP con boost
+function addBattlePassXP(userId, xp) {
+  const userData = getUser(userId);
+  let finalXP = xp;
+  
+  // Verificar si tiene boost activo
+  if (userData.battlePass.xpBoost && Date.now() < userData.battlePass.xpBoost) {
+    finalXP = xp * 2; // Doble XP
+  }
+  
+  userData.battlePass.xp += finalXP;
+  return finalXP; // Retorna el XP final para mostrarlo
+}
+
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
   
@@ -6604,34 +6618,73 @@ client.on('interactionCreate', async interaction => {
     const userData = getUser(interaction.user.id);
 
     const tiers = [
-      { tier: 0, reward: '🎁 Caja Común', xp: 0 },
-      { tier: 1, reward: '💰 2,500 Monedas', xp: 1000 },
-      { tier: 2, reward: '🎁 Caja Rara', xp: 2000 },
-      { tier: 3, reward: '💰 5,000 Monedas', xp: 3000 },
-      { tier: 4, reward: '⚔️ Item RPG Aleatorio', xp: 4000 },
-      { tier: 5, reward: '💰 10,000 Monedas', xp: 5000 },
-      { tier: 6, reward: '💎 Caja Legendaria', xp: 6000 },
-      { tier: 7, reward: '💰 20,000 Monedas', xp: 7000 },
-      { tier: 8, reward: '🎁 2x Caja Rara', xp: 8000 },
-      { tier: 9, reward: '💰 50,000 Monedas', xp: 9000 },
-      { tier: 10, reward: '👑 Título Legendario + 100K', xp: 10000 }
+      { tier: 0, reward: '🎁 Caja Común', coins: 0, icon: '📦', color: '#95a5a6' },
+      { tier: 1, reward: '💰 2,500 Monedas', coins: 2500, icon: '💰', color: '#f1c40f' },
+      { tier: 2, reward: '🎁 Caja Rara + 1,000 🪙', coins: 1000, icon: '🎁', color: '#3498db' },
+      { tier: 3, reward: '� 5,000 Monedas', coins: 5000, icon: '💎', color: '#9b59b6' },
+      { tier: 4, reward: '⚔️ Boost XP 2x (24h)', coins: 0, icon: '⚡', color: '#e67e22' },
+      { tier: 5, reward: '💰 10,000 Monedas + Caja', coins: 10000, icon: '🏆', color: '#f39c12' },
+      { tier: 6, reward: '💎 Caja Legendaria + 5K', coins: 5000, icon: '💎', color: '#8e44ad' },
+      { tier: 7, reward: '🌟 20,000 Monedas', coins: 20000, icon: '🌟', color: '#f1c40f' },
+      { tier: 8, reward: '🎁 3x Cajas Raras + 10K', coins: 10000, icon: '🎉', color: '#3498db' },
+      { tier: 9, reward: '💰 50,000 Monedas', coins: 50000, icon: '💵', color: '#2ecc71' },
+      { tier: 10, reward: '👑 GRAN PREMIO: 100K + 3 Legendarias', coins: 100000, icon: '👑', color: '#e74c3c' }
     ];
 
     const xpPerTier = 1000;
-    const progressBar = '█'.repeat(Math.floor(userData.battlePass.xp / xpPerTier * 10)) + '░'.repeat(10 - Math.floor(userData.battlePass.xp / xpPerTier * 10));
+    const currentXP = userData.battlePass.xp;
+    const percentage = Math.min((currentXP / xpPerTier) * 100, 100);
+    
+    // Barra de progreso animada más visual
+    const filledBlocks = Math.floor(percentage / 10);
+    const emptyBlocks = 10 - filledBlocks;
+    const progressEmojis = ['🟥', '🟧', '🟨', '🟩', '🟦', '🟪', '🟫', '⬜', '⬛', '🟢'];
+    const progressColor = progressEmojis[Math.min(filledBlocks, 9)];
+    const progressBar = `${'█'.repeat(filledBlocks)}${'░'.repeat(emptyBlocks)}`;
+    
+    // Mostrar solo los próximos 5 tiers para no saturar
+    const startTier = Math.max(0, userData.battlePass.tier - 1);
+    const endTier = Math.min(10, userData.battlePass.tier + 4);
+    const visibleTiers = tiers.slice(startTier, endTier + 1);
 
-    const tiersList = tiers.map(t => {
+    const tiersList = visibleTiers.map(t => {
       const claimed = userData.battlePass.claimed.includes(t.tier);
       const unlocked = userData.battlePass.tier >= t.tier;
-      const status = claimed ? '✅' : unlocked ? '🎁' : '🔒';
-      return `${status} **Tier ${t.tier}:** ${t.reward}`;
+      const isCurrent = userData.battlePass.tier === t.tier;
+      
+      let status = claimed ? '✅' : unlocked ? '🎁' : '🔒';
+      let prefix = isCurrent ? '➤ ' : '   ';
+      
+      return `${prefix}${status} **Tier ${t.tier}:** ${t.icon} ${t.reward}`;
     }).join('\n');
 
+    // Calcular próxima recompensa
+    const nextTier = userData.battlePass.tier + 1;
+    const nextReward = nextTier <= 10 ? tiers[nextTier] : null;
+    const xpNeeded = nextTier <= 10 ? xpPerTier - currentXP : 0;
+
     const embed = new EmbedBuilder()
-      .setColor('#9b59b6')
+      .setColor(tiers[userData.battlePass.tier]?.color || '#9b59b6')
       .setTitle('🎖️ Pase de Batalla - Temporada 1')
-      .setDescription(`**${interaction.user.username}**\n\n**Tier Actual:** ${userData.battlePass.tier}/10\n**XP:** ${userData.battlePass.xp}/${xpPerTier}\n${progressBar}\n\n${tiersList}`)
-      .setFooter({ text: 'Gana XP jugando y abriendo cajas • Usa /reclamar-tier para cobrar' })
+      .setDescription(`╔══════════════════════════╗
+║   **${interaction.user.username}**
+║
+║   **Tier:** ${userData.battlePass.tier}/10 ${tiers[userData.battlePass.tier].icon}
+║   **XP:** ${currentXP}/${xpPerTier} (${percentage.toFixed(0)}%)
+║   ${progressBar}
+║
+╚══════════════════════════╝`)
+      .addFields(
+        { 
+          name: '🎯 Progreso Actual', 
+          value: nextReward 
+            ? `**Próximo:** Tier ${nextTier} - ${nextReward.icon} ${nextReward.reward}\n**Necesitas:** ${xpNeeded} XP más` 
+            : '**¡Pase Completado!** 🎊', 
+          inline: false 
+        },
+        { name: '🎁 Tiers Disponibles', value: tiersList, inline: false }
+      )
+      .setFooter({ text: '💡 Juega para ganar XP • Usa /reclamar-tier <número> para cobrar recompensas' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
@@ -6658,19 +6711,19 @@ client.on('interactionCreate', async interaction => {
 
     userData.battlePass.claimed.push(tier);
 
-    // Dar recompensas según tier
+    // Recompensas mejoradas según tier
     const rewards = {
-      0: { coins: 0, boxes: { common: 1 }, msg: '🎁 Caja Común' },
-      1: { coins: 2500, msg: '💰 2,500 Monedas' },
-      2: { boxes: { rare: 1 }, msg: '🎁 Caja Rara' },
-      3: { coins: 5000, msg: '💰 5,000 Monedas' },
-      4: { coins: 3000, msg: '⚔️ 3,000 Monedas (Item RPG)' },
-      5: { coins: 10000, msg: '💰 10,000 Monedas' },
-      6: { boxes: { legendary: 1 }, msg: '💎 Caja Legendaria' },
-      7: { coins: 20000, msg: '💰 20,000 Monedas' },
-      8: { boxes: { rare: 2 }, msg: '🎁 2x Caja Rara' },
-      9: { coins: 50000, msg: '💰 50,000 Monedas' },
-      10: { coins: 100000, msg: '👑 Título Legendario + 100,000 Monedas' }
+      0: { coins: 0, boxes: { common: 1 }, msg: '📦 Caja Común', icon: '📦', color: '#95a5a6' },
+      1: { coins: 2500, msg: '💰 2,500 Monedas', icon: '💰', color: '#f1c40f' },
+      2: { coins: 1000, boxes: { rare: 1 }, msg: '🎁 Caja Rara + 1,000 🪙', icon: '🎁', color: '#3498db' },
+      3: { coins: 5000, msg: '� 5,000 Monedas', icon: '💎', color: '#9b59b6' },
+      4: { coins: 2000, boost: true, msg: '⚡ Boost XP 2x (24h) + 2,000 🪙', icon: '⚡', color: '#e67e22' },
+      5: { coins: 10000, boxes: { rare: 1 }, msg: '🏆 10,000 Monedas + Caja Rara', icon: '🏆', color: '#f39c12' },
+      6: { coins: 5000, boxes: { legendary: 1 }, msg: '💎 Caja Legendaria + 5,000 🪙', icon: '💎', color: '#8e44ad' },
+      7: { coins: 20000, msg: '🌟 20,000 Monedas', icon: '🌟', color: '#f1c40f' },
+      8: { coins: 10000, boxes: { rare: 3 }, msg: '� 3x Cajas Raras + 10,000 🪙', icon: '🎉', color: '#3498db' },
+      9: { coins: 50000, msg: '� 50,000 Monedas', icon: '💵', color: '#2ecc71' },
+      10: { coins: 100000, boxes: { legendary: 3 }, title: '👑 Campeón', msg: '👑 100,000 Monedas + 3 Legendarias + Título', icon: '👑', color: '#e74c3c' }
     };
 
     const reward = rewards[tier];
@@ -6681,14 +6734,43 @@ client.on('interactionCreate', async interaction => {
       if (reward.boxes.rare) userData.boxes.rare += reward.boxes.rare;
       if (reward.boxes.legendary) userData.boxes.legendary += reward.boxes.legendary;
     }
+    if (reward.boost) {
+      // Guardar boost temporal (24 horas)
+      userData.battlePass.xpBoost = Date.now() + (24 * 60 * 60 * 1000);
+    }
+    if (reward.title) {
+      if (!userData.social.titles) userData.social.titles = [];
+      userData.social.titles.push(reward.title);
+    }
 
     updateUser(interaction.user.id, userData);
 
+    // Lista de recompensas detallada
+    let rewardDetails = [];
+    if (reward.coins) rewardDetails.push(`💰 **${reward.coins.toLocaleString()}** Monedas`);
+    if (reward.boxes) {
+      if (reward.boxes.common) rewardDetails.push(`📦 **${reward.boxes.common}** Caja${reward.boxes.common > 1 ? 's' : ''} Común${reward.boxes.common > 1 ? 'es' : ''}`);
+      if (reward.boxes.rare) rewardDetails.push(`🎁 **${reward.boxes.rare}** Caja${reward.boxes.rare > 1 ? 's' : ''} Rara${reward.boxes.rare > 1 ? 's' : ''}`);
+      if (reward.boxes.legendary) rewardDetails.push(`💎 **${reward.boxes.legendary}** Caja${reward.boxes.legendary > 1 ? 's' : ''} Legendaria${reward.boxes.legendary > 1 ? 's' : ''}`);
+    }
+    if (reward.boost) rewardDetails.push(`⚡ **Boost XP 2x** durante 24 horas`);
+    if (reward.title) rewardDetails.push(`👑 Título: **${reward.title}**`);
+
     const embed = new EmbedBuilder()
-      .setColor('#2ecc71')
-      .setTitle(`🎖️ Tier ${tier} Reclamado`)
-      .setDescription(`**${interaction.user.username}** recibió:\n\n${reward.msg}`)
-      .addFields({ name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙` })
+      .setColor(reward.color || '#2ecc71')
+      .setTitle(`${reward.icon} Tier ${tier} Reclamado!`)
+      .setDescription(`╔══════════════════════════╗
+║   **${interaction.user.username}**
+║   
+║   **Recompensas Recibidas:**
+║   ${rewardDetails.join('\n║   ')}
+║
+╚══════════════════════════╝`)
+      .addFields(
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '📦 Cajas', value: `${userData.boxes.common} 📦 | ${userData.boxes.rare} 🎁 | ${userData.boxes.legendary} 💎`, inline: true }
+      )
+      .setFooter({ text: tier === 10 ? '🎉 ¡Felicidades! Completaste el Pase de Batalla' : '💡 Sigue jugando para desbloquear más tiers' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
