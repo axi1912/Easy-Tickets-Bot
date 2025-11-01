@@ -159,6 +159,11 @@ function getStaffRoles() {
   return staffRoles.split(',').map(id => id.trim());
 }
 
+function getLiderPruebasRole() {
+  // Rol específico para notificaciones de aprobación/rechazo de candidatos
+  return process.env.ROL_LIDER_PRUEBAS || '1241211764100698203'; // Usar rol staff por defecto si no está configurado
+}
+
 // Cargar/guardar tickets
 function loadTickets() {
   if (!fs.existsSync(TICKETS_FILE)) return {};
@@ -831,14 +836,13 @@ RESPONDE AHORA:`;
         allowedMentions: { repliedUser: false }
       });
 
-      // Si es ticket de reclutamiento y la IA tomó una decisión FINAL (2 capturas), notificar al staff
+      // Si es ticket de reclutamiento y la IA tomó una decisión FINAL (2 capturas), notificar al Líder de Pruebas
       if (ticket.tipo === 'reclutamiento' && imageCount >= 2) {
         const decision = responseText.toUpperCase();
         
         if (decision.includes('APROBACIÓN_CONFIRMADA') || decision.includes('BIENVENIDO AL PROCESO')) {
-          // Notificar al staff con embed verde (discreto, sin mencionar IA)
-          const staffRoles = getStaffRoles();
-          const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
+          // Notificar al Líder de Pruebas con embed verde (discreto, sin mencionar IA)
+          const liderPruebasRoleId = getLiderPruebasRole();
           
           const approvedEmbed = new EmbedBuilder()
             .setColor('#00ff00')
@@ -853,14 +857,13 @@ RESPONDE AHORA:`;
             .setTimestamp();
 
           await message.channel.send({
-            content: `${mentionStaff}`,
+            content: `<@&${liderPruebasRoleId}>`,
             embeds: [approvedEmbed]
           });
 
         } else if (decision.includes('RECHAZO_CONFIRMADO') || decision.includes('NO CUMPLE') || decision.includes('LAMENTABLEMENTE')) {
-          // Notificar al staff con embed rojo (discreto)
-          const staffRoles = getStaffRoles();
-          const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
+          // Notificar al Líder de Pruebas con embed rojo (discreto)
+          const liderPruebasRoleId = getLiderPruebasRole();
           
           const rejectedEmbed = new EmbedBuilder()
             .setColor('#ff0000')
@@ -875,7 +878,7 @@ RESPONDE AHORA:`;
             .setTimestamp();
 
           await message.channel.send({
-            content: `${mentionStaff}`,
+            content: `<@&${liderPruebasRoleId}>`,
             embeds: [rejectedEmbed]
           });
         }
