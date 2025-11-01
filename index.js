@@ -13,8 +13,9 @@ let aiModel = null;
 let aiVisionModel = null;
 if (process.env.GEMINI_API_KEY) {
   genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  aiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  aiVisionModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  // Usar gemini-1.5-pro que es compatible con la API key gratuita
+  aiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+  aiVisionModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
   console.log('✅ Gemini AI activado (texto + visión)');
 } else {
   console.log('⚠️ GEMINI_API_KEY no encontrada - IA desactivada');
