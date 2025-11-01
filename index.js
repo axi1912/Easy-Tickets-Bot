@@ -665,27 +665,42 @@ client.on('messageCreate', async (message) => {
       let result;
 
       if (hasImages) {
-        // gemini-2.5-flash puede manejar imágenes y texto
-        const imageAttachment = Array.from(message.attachments.values())
-          .find(att => att.contentType?.startsWith('image/'));
+        // gemini-2.5-flash puede manejar múltiples imágenes
+        const imageAttachments = Array.from(message.attachments.values())
+          .filter(att => att.contentType?.startsWith('image/'));
 
-        // Descargar imagen
-        const response = await fetch(imageAttachment.url);
-        const buffer = await response.arrayBuffer();
-        const base64Image = Buffer.from(buffer).toString('base64');
+        // Descargar todas las imágenes
+        const imageParts = [];
+        for (const attachment of imageAttachments) {
+          const response = await fetch(attachment.url);
+          const buffer = await response.arrayBuffer();
+          const base64Image = Buffer.from(buffer).toString('base64');
+          imageParts.push({
+            inlineData: {
+              data: base64Image,
+              mimeType: attachment.contentType
+            }
+          });
+        }
+        
+        const totalImagesInMessage = imageAttachments.length;
 
         const prompt = ticket.tipo === 'reclutamiento' 
           ? `Eres un reclutador profesional de Ea$y Esports. Tono amigable pero siempre profesional. NUNCA uses formatos robóticos ni lenguaje informal.
 
 CONTEXTO:
 - Usuario: ${message.author.username}
-- Esta es la captura número: ${imageCount}
-- Total requerido: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
+- Imágenes en este mensaje: ${totalImagesInMessage}
+- Total de mensajes con imágenes previos: ${imageCount}
+- Requisito: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
 
 HISTORIAL DEL TICKET (últimos mensajes):
 ${history}
 
-⚠️ IMPORTANTE: Si ya hay 2 capturas en el historial, debes analizarlas AMBAS ahora y tomar decisión final.
+⚠️ IMPORTANTE: 
+- Si el usuario envió 2 imágenes en este mensaje, analízalas AMBAS ahora y toma decisión final inmediatamente.
+- Si solo envió 1 imagen pero ya había enviado otra antes (verifica historial), analiza ambas y decide ahora.
+- Si es la primera imagen, pide la segunda.
 
 VALIDACIONES CRÍTICAS:
 1. Si la imagen está borrosa/no se ve el KD claramente:
@@ -713,22 +728,27 @@ IDENTIFICACIÓN ESTRICTA:
 
 INSTRUCCIONES DE RESPUESTA:
 
-   SI ES LA PRIMERA CAPTURA (imageCount = 1):
-   1. Analiza esta captura actual
-   2. Verifica que sea Ranked (no modo normal)
-   3. Lee el KD
-   4. Responde: "Perfecto, he recibido tus estadísticas de **[Resurgimiento/Battle Royale] Ranked**.
-      KD registrado: [X.X]
-      
-      Por favor envía la captura del otro modo ranked ([Resurgimiento Ranked/Battle Royale Ranked]) para completar el análisis."
+   SI ENVIÓ 2 IMÁGENES EN ESTE MENSAJE (totalImagesInMessage = 2):
+   1. Analiza AMBAS imágenes que acabas de recibir
+   2. Verifica que ambas sean Ranked (no modo normal)
+   3. Identifica:
+      - Una debe ser Resurgimiento Ranked con su KD
+      - La otra Battle Royale Ranked con su KD
+   4. TOMA DECISIÓN FINAL INMEDIATAMENTE (ver abajo)
 
-   SI ES LA SEGUNDA CAPTURA O MÁS (imageCount >= 2):
-   1. Analiza la captura actual
+   SI ENVIÓ 1 IMAGEN PERO YA HABÍA ENVIADO OTRA ANTES (imageCount >= 2):
+   1. Analiza la imagen actual
    2. REVISA EL HISTORIAL y busca la otra captura que envió antes
-   3. Identifica los KD de AMBAS capturas:
-      - Una debe ser Resurgimiento Ranked
-      - La otra Battle Royale Ranked
-   4. TOMA DECISIÓN FINAL:
+   3. Identifica los KD de AMBAS capturas
+   4. TOMA DECISIÓN FINAL INMEDIATAMENTE (ver abajo)
+
+   SI ES LA PRIMERA IMAGEN (imageCount = 1 y totalImagesInMessage = 1):
+   "Perfecto, he recibido tus estadísticas de **[Resurgimiento/Battle Royale] Ranked**.
+   KD registrado: [X.X]
+   
+   Por favor envía la captura del otro modo ranked ([Resurgimiento Ranked/Battle Royale Ranked]) para completar el análisis."
+
+   DECISIÓN FINAL (cuando tienes 2 capturas):
    
    SI AMBOS KD >= 3.0:
    "Excelente. He revisado tus estadísticas completas:
@@ -771,14 +791,8 @@ INSTRUCCIONES:
 
 ANALIZA LA IMAGEN Y RESPONDE:`;
 
-        const imagePart = {
-          inlineData: {
-            data: base64Image,
-            mimeType: imageAttachment.contentType
-          }
-        };
-
-        result = await aiModel.generateContent([prompt, imagePart]);
+        // Enviar prompt con todas las imágenes
+        result = await aiModel.generateContent([prompt, ...imageParts]);
 
       } else {
         // Procesar solo texto
