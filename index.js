@@ -1897,15 +1897,19 @@ client.on('interactionCreate', async interaction => {
 
     // Mostrar pregunta de esta tarea
     if (taskQ) {
-      // Crear botones en filas separadas para compatibilidad móvil
-      const buttonRows = taskQ.a.map((answer, idx) => 
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`work_taskanswer_${userId}_${jobId}_${shift}_${correctBonus}_${tasksCompleted}_${taskNum}_${idx}_${taskQ.correct}`)
-            .setLabel(answer)
-            .setStyle(ButtonStyle.Secondary)
-        )
-      );
+      // Usar SelectMenu para mejor compatibilidad móvil
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId(`work_taskanswer_${userId}_${jobId}_${shift}_${correctBonus}_${tasksCompleted}_${taskNum}_${taskQ.correct}`)
+        .setPlaceholder('Selecciona tu respuesta')
+        .addOptions(
+          taskQ.a.map((answer, idx) => ({
+            label: answer,
+            value: `${idx}`,
+            emoji: idx === taskQ.correct ? '✅' : '❓'
+          }))
+        );
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
 
       const embed = new EmbedBuilder()
         .setColor('#9b59b6')
@@ -1913,7 +1917,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription(taskQ.q)
         .setFooter({ text: `Tarea ${taskNum}/3 | Responde para continuar` });
 
-      return await interaction.update({ embeds: [embed], components: buttonRows });
+      return await interaction.update({ embeds: [embed], components: [row] });
     }
 
     if (newTasksCompleted < 3) {
@@ -1967,6 +1971,77 @@ client.on('interactionCreate', async interaction => {
   }
 
   // Respuesta de pregunta de tarea
+  // Handler para respuestas de tareas (SelectMenu)
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('work_taskanswer_')) {
+    const [, , userId, jobId, shift, correctBonus, tasksCompleted, taskNum, correctAnswer] = interaction.customId.split('_');
+    if (interaction.user.id !== userId) {
+      return interaction.reply({ content: '❌ Este menú no es para ti.', flags: 64 });
+    }
+
+    const selectedAnswer = interaction.values[0]; // Valor seleccionado del menú
+
+    const userData = getUser(interaction.user.id);
+    const jobsData = getJobsData(userData.workLevel);
+    const job = jobsData.find(j => j.id === jobId);
+    const newTasksCompleted = parseInt(tasksCompleted) + 1;
+    const isCorrect = parseInt(selectedAnswer) === parseInt(correctAnswer);
+    const newCorrectBonus = parseInt(correctBonus) + (isCorrect ? 1 : 0);
+
+    if (newTasksCompleted < 3) {
+      // Más tareas pendientes
+      const nextTask = parseInt(taskNum) + 1;
+      const taskButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_task${nextTask}_${userId}_${jobId}_${shift}_${newCorrectBonus}_${newTasksCompleted}`)
+          .setLabel(`📋 Siguiente - Tarea ${nextTask}/3`)
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const progressText = [
+        newTasksCompleted >= 1 ? '✅ Tarea 1 completada' : '⏳ Tarea 1',
+        newTasksCompleted >= 2 ? '✅ Tarea 2 completada' : newTasksCompleted === 1 ? '⏳ Iniciar tarea 2' : '🔒 Tarea 2 (Bloqueada)',
+        newTasksCompleted >= 3 ? '✅ Tarea 3 completada' : '🔒 Tarea 3 (Bloqueada)'
+      ].join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(isCorrect ? '#2ecc71' : '#f39c12')
+        .setTitle(`${job.emoji} ${job.name} - ${isCorrect ? '✅ ¡Correcto!' : '⚠️ Incorrecto'}`)
+        .setDescription(isCorrect 
+          ? `¡Excelente! Tarea ${taskNum} completada correctamente. Bonus acumulado.`
+          : `Tarea ${taskNum} completada. La respuesta no fue correcta, pero sigues avanzando.`)
+        .addFields({ name: '📝 Progreso', value: progressText, inline: false })
+        .setFooter({ text: `Respuestas correctas: ${newCorrectBonus}/4 | Más respuestas = más pago` });
+
+      await interaction.update({ embeds: [embed], components: [taskButtons] });
+    } else {
+      // Todas las tareas completadas -> Elegir calidad
+      const qualityButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${newCorrectBonus}_fast`)
+          .setLabel('⚡ Trabajo Rápido')
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`work_quality_${userId}_${jobId}_${shift}_${newCorrectBonus}_perfect`)
+          .setLabel('⭐ Trabajo Perfecto')
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor('#2ecc71')
+        .setTitle(`${job.emoji} ${job.name} - ✅ ¡Turno Completado!`)
+        .setDescription('¡Excelente trabajo! Ahora elige la calidad:')
+        .addFields(
+          { name: '⚡ Trabajo Rápido', value: '• 90% del pago\n• Cooldown reducido (-30 min)\n• +10 XP bonus', inline: true },
+          { name: '⭐ Trabajo Perfecto', value: '• 120% del pago\n• Cooldown normal\n• +25 XP bonus', inline: true }
+        )
+        .setFooter({ text: `Respuestas correctas: ${newCorrectBonus}/4 | ¡Excelente desempeño!` });
+
+      await interaction.update({ embeds: [embed], components: [qualityButtons] });
+    }
+    return;
+  }
+
+  // Handler antiguo de botones (por compatibilidad)
   if (interaction.isButton() && interaction.customId.startsWith('work_taskanswer_')) {
     const [, , userId, jobId, shift, correctBonus, tasksCompleted, taskNum, selectedAnswer, correctAnswer] = interaction.customId.split('_');
     if (interaction.user.id !== userId) {
