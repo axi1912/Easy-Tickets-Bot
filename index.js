@@ -945,14 +945,16 @@ RESPONDE LA DUDA:`;
 
         const userData = getUser(message.author.id);
         userData.coins += winnings - game.bet;
-        userData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(userData, bpXP);
+        const finalXP = xpResult.finalXP;
+        const hasBoost = xpResult.hasBoost;
         userData.stats.gamesPlayed++;
         userData.stats.gamesWon++;
         userData.stats.totalWinnings += winnings - game.bet;
         updateUser(message.author.id, userData);
 
         const medals = ['', '🥇', '🥈', '🥉', '🎖️', '⭐'];
-        const resultBox = `╔═══════════════════════╗\n║                                              ║\n║  ${medals[game.attempts]} **¡CORRECTO!** ${medals[game.attempts]}  ║\n║   El número era **${game.targetNumber}**   ║\n║                                              ║\n║  💰 **+${(winnings - game.bet).toLocaleString()} 🪙** (${multiplier}x)  ║\n║  ⭐ **+${bpXP} XP**  ║\n║                                              ║\n╚═══════════════════════╝`;
+        const resultBox = `╔═══════════════════════╗\n║                                              ║\n║  ${medals[game.attempts]} **¡CORRECTO!** ${medals[game.attempts]}  ║\n║   El número era **${game.targetNumber}**   ║\n║                                              ║\n║  💰 **+${(winnings - game.bet).toLocaleString()} 🪙** (${multiplier}x)  ║\n║  ⭐ **+${finalXP} XP${hasBoost ? ' 🔥' : ''}**  ║\n║                                              ║\n╚═══════════════════════╝`;
 
         const embed = new EmbedBuilder()
           .setColor('#2ecc71')
@@ -2395,7 +2397,9 @@ client.on('interactionCreate', async interaction => {
       userData.coins += selectedPrize.value;
     }
 
-    userData.battlePass.xp += bpXP;
+    const xpResult = addBattlePassXP(userData, bpXP);
+    const finalXP = xpResult.finalXP;
+    const hasBoost = xpResult.hasBoost;
     userData.lastSpin = now;
     updateUser(interaction.user.id, userData);
 
@@ -2405,7 +2409,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`${selectedPrize.emoji} **${selectedPrize.name}**`)
       .addFields(
         { name: '💰 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
-        { name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true },
+        { name: '⭐ XP Ganado', value: `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`, inline: true },
         { name: '⏰ Próximo Spin', value: 'En 24 horas', inline: true }
       )
       .setFooter({ text: '🎰 ¡Vuelve mañana para otro spin gratis!' })
@@ -3234,11 +3238,15 @@ client.on('interactionCreate', async interaction => {
         ...(bpXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
       );
 
-    const bpXP = choice === number.toString() && won ? 100 : won ? 35 : 0;
+    const baseXP = choice === number.toString() && won ? 100 : won ? 35 : 0;
+    let finalXP = 0;
+    let hasBoost = false;
 
     if (won) {
       userData.coins += winnings;
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, baseXP);
+      finalXP = xpResult.finalXP;
+      hasBoost = xpResult.hasBoost;
       userData.stats.gamesWon++;
       userData.stats.totalWinnings += winnings;
     } else {
@@ -3249,6 +3257,14 @@ client.on('interactionCreate', async interaction => {
 
     userData.stats.gamesPlayed++;
     updateUser(interaction.user.id, userData);
+
+    // Actualizar el embed con el XP correcto
+    if (finalXP > 0 && embed.data.fields) {
+      const xpFieldIndex = embed.data.fields.findIndex(f => f.name === '⭐ XP Ganado');
+      if (xpFieldIndex >= 0) {
+        embed.data.fields[xpFieldIndex].value = `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`;
+      }
+    }
 
     embed.setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙 | Color: 2x | Número exacto: 36x` });
     await interaction.editReply({ embeds: [embed] });
@@ -3318,15 +3334,17 @@ client.on('interactionCreate', async interaction => {
       (choice === 'papel' && botChoice === 'piedra') ||
       (choice === 'tijera' && botChoice === 'papel')
     ) {
-      const bpXP = 30;
+      const baseXP = 30;
       winnings = bet * 2;
       userData.coins += bet;
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, baseXP);
+      const finalXP = xpResult.finalXP;
+      const hasBoost = xpResult.hasBoost;
       userData.stats.gamesWon++;
       userData.stats.totalWinnings += bet;
       result = `🎉 **¡VICTORIA!**`;
       color = '#2ecc71';
-      resultBox = `╔═══════════════════╗\n║  🎉 **¡GANASTE!** 🎉   ║\n║   **+${bet.toLocaleString()} 🪙** (2x)   ║\n║   **+${bpXP} ⭐ XP**   ║\n╚═══════════════════╝`;
+      resultBox = `╔═══════════════════╗\n║  🎉 **¡GANASTE!** 🎉   ║\n║   **+${bet.toLocaleString()} 🪙** (2x)   ║\n║   **+${finalXP} ⭐ XP${hasBoost ? ' 🔥' : ''}**   ║\n╚═══════════════════╝`;
     } else {
       winnings = -bet;
       userData.coins -= bet;
@@ -3470,7 +3488,9 @@ client.on('interactionCreate', async interaction => {
 
       const userData = getUser(interaction.user.id);
       userData.coins += winnings - game.bet;
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, bpXP);
+      const finalXP = xpResult.finalXP;
+      const hasBoost = xpResult.hasBoost;
       userData.stats.gamesPlayed++;
       userData.stats.gamesWon++;
       userData.stats.totalWinnings += winnings - game.bet;
@@ -3482,7 +3502,7 @@ client.on('interactionCreate', async interaction => {
       const embed = new EmbedBuilder()
         .setColor('#2ecc71')
         .setTitle('📊 Higher or Lower - ¡COBRADO!')
-        .setDescription(`╔═══════════════════════╗\n║                                              ║\n║  ${medal} **¡PREMIO COBRADO!** ${medal}  ║\n║                                              ║\n║  💰 **+${(winnings - game.bet).toLocaleString()} 🪙**  ║\n║  ⭐ **+${bpXP} XP**  ║\n║                                              ║\n╚═══════════════════════╝`)
+        .setDescription(`╔═══════════════════════╗\n║                                              ║\n║  ${medal} **¡PREMIO COBRADO!** ${medal}  ║\n║                                              ║\n║  💰 **+${(winnings - game.bet).toLocaleString()} 🪙**  ║\n║  ⭐ **+${finalXP} XP${hasBoost ? ' 🔥' : ''}**  ║\n║                                              ║\n╚═══════════════════════╝`)
         .addFields(
           { name: '🔥 Racha final', value: `**${game.streak}** ${medal}`, inline: true },
           { name: '💎 Multiplicador', value: `**${multiplier}x**`, inline: true },
@@ -3851,14 +3871,16 @@ client.on('interactionCreate', async interaction => {
       }
 
       // Actualizar datos de los jugadores
-      const bpXP = 50;
+      const baseXP = 50;
       const winnerData = getUser(winner);
       const loserData = getUser(loser);
 
       winnerData.coins += duel.bet;
       loserData.coins -= duel.bet;
 
-      winnerData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(winnerData, baseXP);
+      const finalXP = xpResult.finalXP;
+      const hasBoost = xpResult.hasBoost;
       winnerData.stats.gamesPlayed++;
       winnerData.stats.gamesWon++;
       winnerData.stats.totalWinnings += duel.bet;
@@ -3878,7 +3900,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('⚔️ Resultado del Duelo')
         .setDescription(`╔═══════════════════════╗\n║                                              ║\n║   🏆 **¡${winnerUser.username.toUpperCase()} GANA!** 🏆   ║\n║                                              ║\n╚═══════════════════════╝\n\n${resultDetails}`)
         .addFields(
-          { name: '👑 Ganador', value: `${winnerUser}\n+${duel.bet.toLocaleString()} 🪙\n+${bpXP} ⭐ XP`, inline: true },
+          { name: '👑 Ganador', value: `${winnerUser}\n+${duel.bet.toLocaleString()} 🪙\n+${finalXP} ⭐ XP${hasBoost ? ' 🔥' : ''}`, inline: true },
           { name: '💔 Perdedor', value: `${loserUser}\n-${duel.bet.toLocaleString()} 🪙`, inline: true },
           { name: '\u200b', value: '\u200b', inline: true },
           { name: '💰 Nuevo balance (Ganador)', value: `${winnerData.coins.toLocaleString()} 🪙`, inline: true },
@@ -4079,6 +4101,9 @@ client.on('interactionCreate', async interaction => {
       winnerData.coins += game.pot;
       winnerData.battlePass.xp += bpXP;
       winnerData.stats.gamesPlayed += 1;
+      const xpResult = addBattlePassXP(winnerData, bpXP);
+      const finalXP = xpResult.finalXP;
+      const hasBoost = xpResult.hasBoost;
       winnerData.stats.gamesWon += 1;
       winnerData.stats.totalWinnings += game.pot;
       updateUser(winner.id, winnerData);
@@ -4097,7 +4122,7 @@ client.on('interactionCreate', async interaction => {
       const winEmbed = new EmbedBuilder()
         .setColor('#2ecc71')
         .setTitle('🎉 ¡BINGO!')
-        .setDescription(`🏆 **${winner.name}** ganó el Bingo!\n\n💰 **Premio:** ${game.pot.toLocaleString()} 🪙\n⭐ **XP Ganado:** +${bpXP} XP\n🎱 **Números sacados:** ${drawCount}\n👥 **Jugadores:** ${game.players.length}`)
+        .setDescription(`🏆 **${winner.name}** ganó el Bingo!\n\n💰 **Premio:** ${game.pot.toLocaleString()} 🪙\n⭐ **XP Ganado:** +${finalXP} XP${hasBoost ? ' 🔥' : ''}\n🎱 **Números sacados:** ${drawCount}\n👥 **Jugadores:** ${game.players.length}`)
         .addFields({ name: '🎯 Números ganadores', value: game.drawnNumbers.slice(-10).join(', ') + '...' })
         .setFooter({ text: 'Ea$y Esports Bingo' })
         .setTimestamp();
@@ -4298,11 +4323,15 @@ client.on('interactionCreate', async interaction => {
       }).join('\n');
 
       const winnings = won ? apuesta * 3 : 0;
-      const bpXP = won ? 60 : 0;
+      const baseXP = won ? 60 : 0;
+      let finalXP = 0;
+      let hasBoost = false;
       userData.coins += winnings;
       userData.stats.gamesPlayed += 1;
       if (won) {
-        userData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(userData, baseXP);
+        finalXP = xpResult.finalXP;
+        hasBoost = xpResult.hasBoost;
         userData.stats.gamesWon += 1;
         userData.stats.totalWinnings += winnings;
       } else {
@@ -4316,7 +4345,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('🏇 Carrera de Emojis - ¡Resultado!')
         .setDescription(`**${interaction.user.username}** apostó al **${racers[corredor - 1]} ${racerNames[corredor - 1]}**\n\n${track}\n\n🏆 **Ganador: ${racers[winner - 1]} ${racerNames[winner - 1]}**`)
         .addFields(
-          { name: won ? '💰 ¡Ganaste!' : '💸 Perdiste', value: `${won ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
+          { name: won ? '💰 ¡Ganaste!' : '💸 Perdiste', value: `${won ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙${won && hasBoost ? ' | +' + finalXP + ' ⭐ XP 🔥' : won ? ' | +' + finalXP + ' ⭐ XP' : ''}`, inline: true },
           { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
           ...(won ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
         )
@@ -4369,12 +4398,16 @@ client.on('interactionCreate', async interaction => {
 
       const survived = Math.random() > 0.3; // 70% de ganar
       const winnings = survived ? apuesta * 5 : 0;
-      const bpXP = survived ? 80 : 0;
+      const baseXP = survived ? 80 : 0;
+      let finalXP = 0;
+      let hasBoost = false;
 
       userData.coins += winnings;
       userData.stats.gamesPlayed += 1;
       if (survived) {
-        userData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(userData, baseXP);
+        finalXP = xpResult.finalXP;
+        hasBoost = xpResult.hasBoost;
         userData.stats.gamesWon += 1;
         userData.stats.totalWinnings += winnings;
       } else {
@@ -4388,7 +4421,7 @@ client.on('interactionCreate', async interaction => {
         .setTitle('🎪 Ruleta Rusa')
         .setDescription(`**${interaction.user.username}** apostó **${apuesta.toLocaleString()}** 🪙\n\n${survived ? '✅ **¡CLICK!** Sobreviviste 🎉' : '💥 **¡BANG!** Perdiste todo 💀'}`)
         .addFields(
-          { name: survived ? '💰 Ganaste' : '💸 Perdiste', value: `${survived ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
+          { name: survived ? '💰 Ganaste' : '💸 Perdiste', value: `${survived ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙${survived && hasBoost ? ' | +' + finalXP + ' ⭐ XP 🔥' : survived ? ' | +' + finalXP + ' ⭐ XP' : ''}`, inline: true },
           { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
           ...(survived ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
         )
@@ -5526,10 +5559,12 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (survived) {
-      const bpXP = 50;
+      const baseXP = 50;
       userData.coins += totalCoins;
       userData.rpg.xp += totalXP;
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, baseXP);
+      const finalXP = xpResult.finalXP;
+      const hasBoost = xpResult.hasBoost;
       
       // Subir de nivel si es necesario
       const xpNeeded = userData.rpg.level * 100;
@@ -5553,7 +5588,7 @@ client.on('interactionCreate', async interaction => {
           { name: '⭐ XP RPG', value: `+${totalXP} XP`, inline: true },
           { name: '💰 Monedas', value: `+${totalCoins.toLocaleString()} 🪙`, inline: true },
           { name: '📊 Nivel', value: `${userData.rpg.level}`, inline: true },
-          { name: '⭐ XP Pase', value: `+${bpXP} XP`, inline: true }
+          { name: '⭐ XP Pase', value: `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`, inline: true }
         )
         .setFooter({ text: 'Puedes volver en 2 horas' })
         .setTimestamp();
@@ -5757,19 +5792,23 @@ client.on('interactionCreate', async interaction => {
         updateUser(player.id, pData);
       }
 
-      const bpXP = 100;
+      const baseXP = 100;
       
       // Dar XP de pase de batalla a todos los participantes
+      let maxFinalXP = 0;
+      let anyBoost = false;
       for (const player of game.players) {
         const pData = getUser(player.id);
-        pData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(pData, baseXP);
+        maxFinalXP = Math.max(maxFinalXP, xpResult.finalXP);
+        anyBoost = anyBoost || xpResult.hasBoost;
         updateUser(player.id, pData);
       }
 
       const embed2 = new EmbedBuilder()
         .setColor('#2ecc71')
         .setTitle('🏆 ¡VICTORIA!')
-        .setDescription(`¡El raid derrotó a **${game.bossName}**!\n\n**Recompensas por jugador:**\n💰 ${reward.toLocaleString()} 🪙\n⭐ ${xpReward} XP RPG\n⭐ ${bpXP} XP Pase`)
+        .setDescription(`¡El raid derrotó a **${game.bossName}**!\n\n**Recompensas por jugador:**\n💰 ${reward.toLocaleString()} 🪙\n⭐ ${xpReward} XP RPG\n⭐ ${baseXP}+ XP Pase${anyBoost ? ' 🔥' : ''}`)
         .addFields({ name: '👥 Participantes', value: game.players.map(p => p.name).join(', ') })
         .setTimestamp();
 
@@ -5899,11 +5938,13 @@ client.on('interactionCreate', async interaction => {
     // Recompensas
     const reward = 500 + Math.floor(Math.random() * 500);
     const xp = 50 + Math.floor(Math.random() * 50);
-    const bpXP = 60;
+    const baseXP = 60;
 
     winnerData.coins += reward;
     winnerData.rpg.xp += xp;
-    winnerData.battlePass.xp += bpXP;
+    const xpResult = addBattlePassXP(winnerData, baseXP);
+    const finalXP = xpResult.finalXP;
+    const hasBoost = xpResult.hasBoost;
     updateUser(winner, winnerData);
 
     const embed = new EmbedBuilder()
@@ -5912,7 +5953,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`**${winnerUser.username}** venció a **${loserUser.username}**!`)
       .addFields(
         { name: '🏆 Ganador', value: `${winnerUser.username} (${classesData[winnerData.rpg.class].emoji} Lv${winnerData.rpg.level})`, inline: true },
-        { name: '💰 Recompensa', value: `${reward.toLocaleString()} 🪙 + ${xp} XP RPG + ${bpXP} XP Pase`, inline: true }
+        { name: '💰 Recompensa', value: `${reward.toLocaleString()} 🪙 + ${xp} XP RPG + ${finalXP} XP Pase${hasBoost ? ' 🔥' : ''}`, inline: true }
       )
       .setFooter({ text: 'Buen combate' })
       .setTimestamp();
@@ -6588,7 +6629,12 @@ client.on('interactionCreate', async interaction => {
       if (reward.type === 'coins') {
         userData.coins += amount;
       } else if (reward.type === 'bpxp') {
-        userData.battlePass.xp += amount;
+        // Usar addBattlePassXP para aplicar boost correctamente
+        const xpResult = addBattlePassXP(userData, amount);
+        selectedRewards[selectedRewards.length - 1].amount = xpResult.finalXP; // Actualizar el amount mostrado
+        if (xpResult.hasBoost) {
+          selectedRewards[selectedRewards.length - 1].name += ' 🔥';
+        }
       } else if (reward.type === 'box') {
         userData.boxes.common += amount;
       } else if (reward.type === 'rpgxp' && userData.rpg.class) {
@@ -6600,7 +6646,7 @@ client.on('interactionCreate', async interaction => {
     updateUser(interaction.user.id, userData);
 
     // Check BP level up (sin reducir XP automáticamente)
-    const xpPerTier = 1000;
+    const xpPerTier = 15000;
     let leveledUp = false;
     while (userData.battlePass.xp >= xpPerTier && userData.battlePass.tier < 10) {
       userData.battlePass.tier += 1;
@@ -6643,7 +6689,7 @@ client.on('interactionCreate', async interaction => {
       { tier: 10, reward: '👑 GRAN PREMIO: 100K + 3 Legendarias', coins: 100000, icon: '👑', color: '#e74c3c' }
     ];
 
-    const xpPerTier = 1000;
+    const xpPerTier = 15000;
     const currentXP = userData.battlePass.xp;
     const percentage = Math.min((currentXP / xpPerTier) * 100, 100);
     
@@ -7046,11 +7092,15 @@ client.on('interactionCreate', async interaction => {
 
     const userData = getUser(interaction.user.id);
     const winnings = winner === 'player' ? game.pot : 0;
-    const bpXP = winner === 'player' ? 70 : 0;
+    const baseXP = winner === 'player' ? 70 : 0;
+    let finalXP = 0;
+    let hasBoost = false;
     userData.coins += winnings;
     userData.stats.gamesPlayed += 1;
     if (winner === 'player') {
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, baseXP);
+      finalXP = xpResult.finalXP;
+      hasBoost = xpResult.hasBoost;
       userData.stats.gamesWon += 1;
       userData.stats.totalWinnings += winnings;
     } else {
@@ -7068,7 +7118,7 @@ client.on('interactionCreate', async interaction => {
       .setTitle('🃏 Poker - Showdown!')
       .setDescription(`**📋 The River - Resultado Final**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:** ${playerCardsStr}\n*${playerHand.name}*\n\n**🤖 Bot:** ${botCardsStr}\n*${botHand.name}*\n\n${winner === 'player' ? '🎉 **¡GANASTE!**' : '💔 **El Bot Ganó**'}`)
       .addFields(
-        { name: winner === 'player' ? '💰 Ganaste' : '💸 Perdiste', value: `${winner === 'player' ? '+' : '-'}${(winner === 'player' ? winnings - game.bet : game.bet).toLocaleString()} 🪙`, inline: true },
+        { name: winner === 'player' ? '💰 Ganaste' : '💸 Perdiste', value: `${winner === 'player' ? '+' : '-'}${(winner === 'player' ? winnings - game.bet : game.bet).toLocaleString()} 🪙${winner === 'player' && hasBoost ? ' | +' + finalXP + ' ⭐ XP 🔥' : winner === 'player' ? ' | +' + finalXP + ' ⭐ XP' : ''}`, inline: true },
         { name: '🏦 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
         { name: '💰 Pozo Total', value: `${game.pot.toLocaleString()} 🪙`, inline: true },
         ...(bpXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
