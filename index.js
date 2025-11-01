@@ -13,8 +13,77 @@ const CANAL_LOGS = '1419826668708827146';
 // Archivo de economía
 const ECONOMY_FILE = './economy.json';
 
+// Archivo de clanes
+const CLANS_FILE = './clans.json';
+
+// Archivo de datos persistentes (cooldowns, juegos activos, etc.)
+const PERSISTENT_FILE = './persistent.json';
+
 // Almacenar juegos activos en memoria
 const activeGames = new Map();
+
+// Cargar/guardar datos persistentes
+function loadPersistent() {
+  if (!fs.existsSync(PERSISTENT_FILE)) {
+    return { activeGames: [], cooldowns: {} };
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(PERSISTENT_FILE, 'utf8'));
+    
+    // Restaurar juegos activos desde el archivo
+    if (data.activeGames && Array.isArray(data.activeGames)) {
+      data.activeGames.forEach(([key, value]) => {
+        // Verificar que el juego no haya expirado (más de 5 minutos)
+        const gameTime = parseInt(key.split('_').pop());
+        const now = Date.now();
+        if (now - gameTime < 300000) { // 5 minutos
+          activeGames.set(key, value);
+        }
+      });
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('❌ Error cargando datos persistentes:', error);
+    return { activeGames: [], cooldowns: {} };
+  }
+}
+
+function savePersistent() {
+  try {
+    const data = {
+      activeGames: Array.from(activeGames.entries()),
+      cooldowns: {},
+      lastSave: Date.now()
+    };
+    fs.writeFileSync(PERSISTENT_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error('❌ Error guardando datos persistentes:', error);
+  }
+}
+
+// Auto-guardar datos persistentes cada 30 segundos
+setInterval(() => {
+  savePersistent();
+}, 30000);
+
+// Funciones wrapper para activeGames que auto-guardan
+const originalSet = activeGames.set.bind(activeGames);
+const originalDelete = activeGames.delete.bind(activeGames);
+
+activeGames.set = function(key, value) {
+  const result = originalSet(key, value);
+  // Guardar después de un pequeño delay para evitar escrituras excesivas
+  setTimeout(() => savePersistent(), 1000);
+  return result;
+};
+
+activeGames.delete = function(key) {
+  const result = originalDelete(key);
+  // Guardar después de un pequeño delay
+  setTimeout(() => savePersistent(), 1000);
+  return result;
+};
 
 // Sistema de Backup Automático
 function createBackup() {
@@ -38,13 +107,29 @@ function createBackup() {
       fs.copyFileSync(TICKETS_FILE, ticketsBackup);
     }
 
+    // Backup de datos persistentes
+    if (fs.existsSync(PERSISTENT_FILE)) {
+      const persistentBackup = `${backupDir}/persistent_${timestamp}.json`;
+      fs.copyFileSync(PERSISTENT_FILE, persistentBackup);
+    }
+
+    // Backup de clanes
+    if (fs.existsSync(CLANS_FILE)) {
+      const clansBackup = `${backupDir}/clans_${timestamp}.json`;
+      fs.copyFileSync(CLANS_FILE, clansBackup);
+    }
+
     // Limpiar backups antiguos (mantener solo los últimos 10 de cada tipo)
     const files = fs.readdirSync(backupDir);
     const economyBackups = files.filter(f => f.startsWith('economy_')).sort().reverse();
     const ticketsBackups = files.filter(f => f.startsWith('tickets_')).sort().reverse();
+    const persistentBackups = files.filter(f => f.startsWith('persistent_')).sort().reverse();
+    const clansBackups = files.filter(f => f.startsWith('clans_')).sort().reverse();
 
     economyBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
     ticketsBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
+    persistentBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
+    clansBackups.slice(10).forEach(file => fs.unlinkSync(`${backupDir}/${file}`));
 
     console.log(`✅ Backup creado: ${timestamp}`);
   } catch (error) {
@@ -76,6 +161,16 @@ function loadEconomy() {
 
 function saveEconomy(economy) {
   fs.writeFileSync(ECONOMY_FILE, JSON.stringify(economy, null, 2));
+}
+
+// Cargar/guardar clanes
+function loadClans() {
+  if (!fs.existsSync(CLANS_FILE)) return {};
+  return JSON.parse(fs.readFileSync(CLANS_FILE, 'utf8'));
+}
+
+function saveClans(clans) {
+  fs.writeFileSync(CLANS_FILE, JSON.stringify(clans, null, 2));
 }
 
 // Generar misiones diarias aleatorias
@@ -372,6 +467,11 @@ function updateUser(userId, data) {
 
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
+  
+  // Cargar datos persistentes (juegos activos, cooldowns, etc.)
+  console.log('📂 Cargando datos persistentes...');
+  loadPersistent();
+  console.log(`✅ Datos persistentes cargados. Juegos activos restaurados: ${activeGames.size}`);
   
   // Registrar comandos ejecutando register.js
   try {
@@ -778,6 +878,17 @@ client.on('interactionCreate', async interaction => {
 
   // Botón: Reclamar ticket
   if (interaction.isButton() && interaction.customId === 'reclamar_ticket') {
+    // Verificar si es staff
+    const staffRoles = getStaffRoles();
+    const hasStaffRole = interaction.member.roles.cache.some(role => staffRoles.includes(role.id));
+
+    if (!hasStaffRole && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ 
+        content: '❌ Solo el staff puede reclamar tickets.', 
+        flags: 64 
+      });
+    }
+
     const tickets = loadTickets();
     console.log(`🔍 Intentando reclamar ticket en canal: ${interaction.channel.id}`);
     console.log(`📋 Tickets cargados:`, Object.keys(tickets));
@@ -805,6 +916,17 @@ client.on('interactionCreate', async interaction => {
 
   // Botón: Cerrar ticket
   if (interaction.isButton() && interaction.customId === 'cerrar_ticket') {
+    // Verificar si es staff
+    const staffRoles = getStaffRoles();
+    const hasStaffRole = interaction.member.roles.cache.some(role => staffRoles.includes(role.id));
+
+    if (!hasStaffRole && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ 
+        content: '❌ Solo el staff puede cerrar tickets.', 
+        flags: 64 
+      });
+    }
+
     const tickets = loadTickets();
     const ticket = tickets[interaction.channel.id];
 
@@ -5401,17 +5523,6 @@ client.on('interactionCreate', async interaction => {
   // ========== FASE 4: SISTEMA SOCIAL ==========
   
   // Sistema de clanes (almacenado en memoria)
-  const CLANS_FILE = './clans.json';
-  
-  function loadClans() {
-    if (!fs.existsSync(CLANS_FILE)) return {};
-    return JSON.parse(fs.readFileSync(CLANS_FILE, 'utf8'));
-  }
-
-  function saveClans(clans) {
-    fs.writeFileSync(CLANS_FILE, JSON.stringify(clans, null, 2));
-  }
-
   // CASARSE
   if (interaction.isChatInputCommand() && interaction.commandName === 'casarse') {
     const partner = interaction.options.getUser('pareja');
@@ -6968,6 +7079,31 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.reply({ content: response });
   }
+});
+
+// Guardar datos cuando el bot se cierra
+process.on('SIGINT', () => {
+  console.log('💾 Guardando datos antes de cerrar...');
+  savePersistent();
+  createBackup();
+  console.log('✅ Datos guardados. Cerrando bot...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('💾 Guardando datos antes de cerrar...');
+  savePersistent();
+  createBackup();
+  console.log('✅ Datos guardados. Cerrando bot...');
+  process.exit(0);
+});
+
+// Capturar errores no manejados y guardar datos
+process.on('uncaughtException', (error) => {
+  console.error('❌ Error crítico:', error);
+  savePersistent();
+  createBackup();
+  process.exit(1);
 });
 
 client.login(process.env.DISCORD_TOKEN);
