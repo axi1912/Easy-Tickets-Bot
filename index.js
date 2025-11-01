@@ -7,12 +7,20 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// Inicializar Gemini AI con Vision (solo si hay API key)
-// NOTA: Temporalmente desactivado - La API key no tiene acceso a los modelos necesarios
+// Inicializar Gemini AI con Vision (modelo actualizado 2.5)
 let genAI = null;
 let aiModel = null;
-let aiVisionModel = null;
-console.log('⚠️ Sistema de IA desactivado temporalmente - Usar comando /respuesta para responder tickets');
+if (process.env.GEMINI_API_KEY) {
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    aiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    console.log('✅ Sistema de IA activado con modelo gemini-2.5-flash');
+  } catch (error) {
+    console.error('❌ Error al inicializar Gemini AI:', error);
+  }
+} else {
+  console.log('⚠️ No se encontró GEMINI_API_KEY - Sistema de IA desactivado');
+}
 
 // Archivo de tickets
 const TICKETS_FILE = './tickets.json';
@@ -640,8 +648,8 @@ client.on('messageCreate', async (message) => {
 
       let result;
 
-      if (hasImages && aiVisionModel) {
-        // Usar Gemini Vision para analizar imágenes
+      if (hasImages) {
+        // gemini-2.5-flash puede manejar imágenes y texto
         const imageAttachment = Array.from(message.attachments.values())
           .find(att => att.contentType?.startsWith('image/'));
 
@@ -676,10 +684,10 @@ ANALIZA LA IMAGEN Y RESPONDE:`;
           }
         };
 
-        result = await aiVisionModel.generateContent([prompt, imagePart]);
+        result = await aiModel.generateContent([prompt, imagePart]);
 
       } else {
-        // Usar Gemini Pro para texto
+        // Procesar solo texto
         const prompt = `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
 
 CONTEXTO DEL TICKET:
