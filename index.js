@@ -3894,14 +3894,39 @@ client.on('interactionCreate', async interaction => {
 
         const choices = ['piedra', 'papel', 'tijera'];
         const emojis = { 'piedra': '✊', 'papel': '✋', 'tijera': '✌️' };
-        const challengerChoice = choices[Math.floor(Math.random() * 3)];
-        const opponentChoice = choices[Math.floor(Math.random() * 3)];
+        let challengerChoice, opponentChoice;
+        let rounds = [];
+        let maxRounds = 5; // Máximo 5 rounds para evitar empates infinitos
 
-        loadingEmbed.setDescription(`✊ **Jugadas:**\n\n${challenger.username}: ${emojis[challengerChoice]} **${challengerChoice}**\n${opponent.username}: ${emojis[opponentChoice]} **${opponentChoice}**`);
+        // Jugar rounds hasta que haya ganador o se alcance el máximo
+        for (let round = 1; round <= maxRounds; round++) {
+          challengerChoice = choices[Math.floor(Math.random() * 3)];
+          opponentChoice = choices[Math.floor(Math.random() * 3)];
+          
+          rounds.push(`Round ${round}: ${emojis[challengerChoice]} vs ${emojis[opponentChoice]}`);
+
+          if (challengerChoice !== opponentChoice) {
+            // Hay ganador, salir del bucle
+            if (round > 1) {
+              loadingEmbed.setDescription(`✊ **¡Empates anteriores! Jugando Round ${round}...**\n\n${rounds.slice(-2).join('\n')}`);
+              await interaction.editReply({ embeds: [loadingEmbed] });
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            break;
+          } else if (round < maxRounds) {
+            // Empate, mostrar y continuar
+            loadingEmbed.setDescription(`✊ **EMPATE en Round ${round}!**\n\n${challenger.username}: ${emojis[challengerChoice]}\n${opponent.username}: ${emojis[opponentChoice]}\n\n⚡ Jugando otro round...`);
+            await interaction.editReply({ embeds: [loadingEmbed] });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
+        loadingEmbed.setDescription(`✊ **Jugadas finales:**\n\n${challenger.username}: ${emojis[challengerChoice]} **${challengerChoice}**\n${opponent.username}: ${emojis[opponentChoice]} **${opponentChoice}**${rounds.length > 1 ? `\n\n📊 Empates: ${rounds.length - 1}` : ''}`);
         await interaction.editReply({ embeds: [loadingEmbed] });
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         if (challengerChoice === opponentChoice) {
+          // Si después de 5 rounds sigue empate (muy raro), elegir al azar
           winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
           loser = winner === duel.challenger ? duel.opponent : duel.challenger;
         } else if (
@@ -3915,20 +3940,34 @@ client.on('interactionCreate', async interaction => {
           winner = duel.opponent;
           loser = duel.challenger;
         }
-        resultDetails = `${emojis[challengerChoice]} vs ${emojis[opponentChoice]}`;
+        resultDetails = `${emojis[challengerChoice]} vs ${emojis[opponentChoice]}${rounds.length > 1 ? ` (${rounds.length} rounds)` : ''}`;
 
       } else if (gameType === 'guess') {
         loadingEmbed.setDescription('🔢 **Adivinando número (1-100)...**');
         await interaction.editReply({ embeds: [loadingEmbed] });
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        const targetNumber = Math.floor(Math.random() * 100) + 1;
-        const challengerGuess = Math.floor(Math.random() * 100) + 1;
-        const opponentGuess = Math.floor(Math.random() * 100) + 1;
-        const challengerDiff = Math.abs(targetNumber - challengerGuess);
-        const opponentDiff = Math.abs(targetNumber - opponentGuess);
+        let targetNumber, challengerGuess, opponentGuess, challengerDiff, opponentDiff;
+        let attempts = 0;
+        let maxAttempts = 3;
 
-        loadingEmbed.setDescription(`🔢 **Número secreto: ${targetNumber}**\n\n${challenger.username}: **${challengerGuess}** (diferencia: ${challengerDiff})\n${opponent.username}: **${opponentGuess}** (diferencia: ${opponentDiff})`);
+        // Repetir hasta que NO haya empate o se alcance el máximo
+        do {
+          attempts++;
+          targetNumber = Math.floor(Math.random() * 100) + 1;
+          challengerGuess = Math.floor(Math.random() * 100) + 1;
+          opponentGuess = Math.floor(Math.random() * 100) + 1;
+          challengerDiff = Math.abs(targetNumber - challengerGuess);
+          opponentDiff = Math.abs(targetNumber - opponentGuess);
+
+          if (challengerDiff === opponentDiff && attempts < maxAttempts) {
+            loadingEmbed.setDescription(`🔢 **¡EMPATE en intento ${attempts}!**\n\nNúmero: ${targetNumber}\nAmbos: diferencia ${challengerDiff}\n\n⚡ Intentando de nuevo...`);
+            await interaction.editReply({ embeds: [loadingEmbed] });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } while (challengerDiff === opponentDiff && attempts < maxAttempts);
+
+        loadingEmbed.setDescription(`🔢 **Número secreto: ${targetNumber}**\n\n${challenger.username}: **${challengerGuess}** (diferencia: ${challengerDiff})\n${opponent.username}: **${opponentGuess}** (diferencia: ${opponentDiff})${attempts > 1 ? `\n\n📊 Intentos: ${attempts}` : ''}`);
         await interaction.editReply({ embeds: [loadingEmbed] });
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -3939,10 +3978,11 @@ client.on('interactionCreate', async interaction => {
           winner = duel.opponent;
           loser = duel.challenger;
         } else {
+          // Si después de 3 intentos sigue empate (extremadamente raro), elegir al azar
           winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
           loser = winner === duel.challenger ? duel.opponent : duel.challenger;
         }
-        resultDetails = `Número: **${targetNumber}** | ${challenger.username}: ${challengerGuess} | ${opponent.username}: ${opponentGuess}`;
+        resultDetails = `Número: **${targetNumber}** | ${challenger.username}: ${challengerGuess} | ${opponent.username}: ${opponentGuess}${attempts > 1 ? ` (${attempts} intentos)` : ''}`;
       }
 
       // Actualizar datos de los jugadores
