@@ -487,8 +487,7 @@ function updateUser(userId, data) {
 }
 
 // Función para agregar XP con boost
-function addBattlePassXP(userId, xp) {
-  const userData = getUser(userId);
+function addBattlePassXP(userData, xp) {
   let finalXP = xp;
   
   // Verificar si tiene boost activo
@@ -497,7 +496,7 @@ function addBattlePassXP(userId, xp) {
   }
   
   userData.battlePass.xp += finalXP;
-  return finalXP; // Retorna el XP final para mostrarlo
+  return { finalXP, hasBoost: finalXP > xp }; // Retorna el XP final y si tiene boost
 }
 
 client.once('ready', async () => {
@@ -2846,17 +2845,17 @@ client.on('interactionCreate', async interaction => {
       let icon = '🤝';
 
       if (dealerValue > 21 || playerValue > dealerValue) {
-        const bpXP = 40;
+        const baseXP = 40;
+        const { finalXP, hasBoost } = addBattlePassXP(userData, baseXP);
         icon = '🎉';
         resultBox = `╔═══════════════════════╗
 ║   � ¡VICTORIA! 🎊    ║
 ║                       ║
 ║   Ganancia: +${game.bet.toLocaleString()} 🪙   ║
-║   XP: +${bpXP} ⭐           ║
+║   XP: +${finalXP} ⭐${hasBoost ? ' 🔥' : ''}           ║
 ╚═══════════════════════╝`;
         result = `${icon} **¡Ganaste!**\n\n${resultBox}`;
         userData.coins += game.bet;
-        userData.battlePass.xp += bpXP;
         userData.stats.gamesWon++;
         userData.stats.totalWinnings += game.bet;
         color = '#2ecc71';
@@ -2982,13 +2981,13 @@ client.on('interactionCreate', async interaction => {
         );
 
       if (won) {
-        const bpXP = 20;
+        const baseXP = 20;
+        const { finalXP, hasBoost } = addBattlePassXP(userData, baseXP);
         userData.coins += bet;
-        userData.battlePass.xp += bpXP;
         userData.stats.gamesWon++;
         userData.stats.totalWinnings += bet;
         embed.setColor('#2ecc71')
-          .setDescription(`╔═══════════════════╗\n║   🎉 **¡GANASTE!** 🎉    ║\n║  **+${bet.toLocaleString()} 🪙**  ║\n║  **+${bpXP} ⭐ XP**  ║\n╚═══════════════════╝`);
+          .setDescription(`╔═══════════════════╗\n║   🎉 **¡GANASTE!** 🎉    ║\n║  **+${bet.toLocaleString()} 🪙**  ║\n║  **+${finalXP} ⭐ XP**${hasBoost ? ' 🔥' : ''}  ║\n╚═══════════════════╝`);
       } else {
         userData.coins -= bet;
         userData.stats.gamesLost++;
@@ -3102,13 +3101,17 @@ client.on('interactionCreate', async interaction => {
       resultBox = `╔═══════════════════╗\n║   ❌ **PERDISTE** ❌   ║\n║   **-${bet.toLocaleString()} 🪙**   ║\n╚═══════════════════╝`;
     }
 
-      const bpXP = total === 12 ? 50 : total >= 10 ? 30 : 0;
+      const baseXP = total === 12 ? 50 : total >= 10 ? 30 : 0;
+      let finalXP = 0;
+      let hasBoost = false;
 
       userData.coins += winnings;
       userData.stats.gamesPlayed++;
       
       if (winnings > 0) {
-        userData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(userData, baseXP);
+        finalXP = xpResult.finalXP;
+        hasBoost = xpResult.hasBoost;
         userData.stats.gamesWon++;
         userData.stats.totalWinnings += winnings;
       } else if (winnings < 0) {
@@ -3125,8 +3128,8 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           { name: '🎲 Dados', value: `${diceEmojis[dice1-1]} ${diceEmojis[dice2-1]}`, inline: true },
           { name: '📊 Total', value: `**${total}** puntos`, inline: true },
-          { name: '💰 Apuesta', value: `**${bet.toLocaleString()}** 🪙`, inline: true },
-          ...(bpXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
+          { name: '💰 Apuesta', value: `**${bet.toLocaleString()} **🪙`, inline: true },
+          ...(finalXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`, inline: true }] : [])
         )
         .setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
 
@@ -4196,17 +4199,22 @@ client.on('interactionCreate', async interaction => {
       }
 
       // Calcular XP según el tipo de premio
-      let bpXP = 0;
+      let baseXP = 0;
       if (reel1 === reel2 && reel2 === reel3) {
-        bpXP = reel1 === '💎' ? 150 : reel1 === '7️⃣' ? 100 : 50;
+        baseXP = reel1 === '💎' ? 150 : reel1 === '7️⃣' ? 100 : 50;
       } else if (winnings > 0) {
-        bpXP = 25;
+        baseXP = 25;
       }
+
+      let finalXP = 0;
+      let hasBoost = false;
 
       userData.coins += winnings;
       userData.stats.gamesPlayed += 1;
       if (winnings > 0) {
-        userData.battlePass.xp += bpXP;
+        const xpResult = addBattlePassXP(userData, baseXP);
+        finalXP = xpResult.finalXP;
+        hasBoost = xpResult.hasBoost;
         userData.stats.gamesWon += 1;
         userData.stats.totalWinnings += winnings;
       } else {
@@ -4222,7 +4230,7 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           { name: winnings > 0 ? '💰 Ganaste' : '💸 Perdiste', value: `${winnings > 0 ? '+' : ''}${(winnings - apuesta).toLocaleString()} 🪙`, inline: true },
           { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
-          ...(bpXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
+          ...(finalXP > 0 ? [{ name: '⭐ XP Ganado', value: `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`, inline: true }] : [])
         )
         .setFooter({ text: 'Ea$y Esports Casino' })
         .setTimestamp();
@@ -4714,12 +4722,16 @@ client.on('interactionCreate', async interaction => {
     
     const winnings = won ? prize : 0;
     const bpXPRewards = { facil: 30, media: 80, dificil: 200 };
-    const bpXP = won ? bpXPRewards[dificultad] : 0;
+    const baseXP = won ? bpXPRewards[dificultad] : 0;
+    let finalXP = 0;
+    let hasBoost = false;
 
     userData.coins += winnings;
     userData.stats.gamesPlayed += 1;
     if (won) {
-      userData.battlePass.xp += bpXP;
+      const xpResult = addBattlePassXP(userData, baseXP);
+      finalXP = xpResult.finalXP;
+      hasBoost = xpResult.hasBoost;
       userData.stats.gamesWon += 1;
       userData.stats.totalWinnings += winnings;
     } else {
@@ -4735,7 +4747,7 @@ client.on('interactionCreate', async interaction => {
       .addFields(
         { name: won ? '💰 Ganaste' : '💸 Perdiste', value: `${won ? '+' : '-'}${(won ? winnings - game.cost : game.cost).toLocaleString()} 🪙`, inline: true },
         { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
-        ...(won ? [{ name: '⭐ XP Ganado', value: `+${bpXP} XP`, inline: true }] : [])
+        ...(won ? [{ name: '⭐ XP Ganado', value: `+${finalXP} XP${hasBoost ? ' 🔥' : ''}`, inline: true }] : [])
       )
       .setFooter({ text: 'Ea$y Esports Trivia' })
       .setTimestamp();
