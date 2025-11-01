@@ -8,18 +8,11 @@ const client = new Client({
 });
 
 // Inicializar Gemini AI con Vision (solo si hay API key)
+// NOTA: Temporalmente desactivado - La API key no tiene acceso a los modelos necesarios
 let genAI = null;
 let aiModel = null;
 let aiVisionModel = null;
-if (process.env.GEMINI_API_KEY) {
-  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  // Usar gemini-1.5-pro que es compatible con la API key gratuita
-  aiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-  aiVisionModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-  console.log('✅ Gemini AI activado (texto + visión)');
-} else {
-  console.log('⚠️ GEMINI_API_KEY no encontrada - IA desactivada');
-}
+console.log('⚠️ Sistema de IA desactivado temporalmente - Usar comando /respuesta para responder tickets');
 
 // Archivo de tickets
 const TICKETS_FILE = './tickets.json';
