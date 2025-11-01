@@ -658,7 +658,41 @@ client.on('messageCreate', async (message) => {
         const buffer = await response.arrayBuffer();
         const base64Image = Buffer.from(buffer).toString('base64');
 
-        const prompt = `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
+        const prompt = ticket.tipo === 'reclutamiento' 
+          ? `Eres un asistente AUTÓNOMO de reclutamiento para Ea$y Esports, equipo competitivo de Call of Duty Warzone.
+
+CONTEXTO:
+- Usuario: ${message.author.username}
+- Mensaje: ${message.content || 'Usuario envió una imagen'}
+
+TU TRABAJO:
+1. ANALIZA la imagen con máximo detalle
+2. Si es captura de estadísticas de Warzone:
+   - Busca el KD (K/D Ratio) - DEBE ser >= 3.0 para aprobar
+   - Verifica wins, partidas jugadas, nivel
+   - Revisa si hay logros o torneos destacados
+3. TOMA UNA DECISIÓN FINAL:
+   - Si KD >= 3.0 y stats decentes: **APROBADO** ✅
+   - Si KD < 3.0 o stats insuficientes: **RECHAZADO** ❌
+   - Si la imagen NO muestra stats claras: Pide captura de estadísticas completas
+
+FORMATO DE RESPUESTA:
+---
+[Análisis breve de las estadísticas que ves]
+
+**DECISIÓN: [APROBADO/RECHAZADO/NECESITA MÁS INFO]**
+
+[Razón de la decisión en 1-2 líneas]
+---
+
+IMPORTANTE:
+- NO inventes datos que no ves en la imagen
+- NO digas "el staff revisará" - TÚ decides
+- Sé específico sobre qué ves en la captura
+- Si apruebas, felicítalo. Si rechazas, sé respetuoso pero firme.
+
+ANALIZA Y DECIDE AHORA:`
+          : `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
 
 CONTEXTO DEL TICKET:
 - Tipo: ${tipoTicket}
@@ -667,11 +701,9 @@ CONTEXTO DEL TICKET:
 
 INSTRUCCIONES:
 1. Analiza la imagen detalladamente
-2. Si es una captura de estadísticas: verifica KD, wins, nivel, torneos
-   - KD mínimo requerido: 3.0
-   - Comenta si cumple o no con los requisitos
-3. Si es una captura de torneo: verifica posición, premio, fecha
-4. Si es gameplay: comenta sobre la calidad de juego visible
+2. Si es captura de problema técnico, identifica el error
+3. Si es gameplay, proporciona feedback constructivo
+4. Si es consulta general, responde con información útil
 5. Responde profesionalmente y conciso (máximo 150 palabras)
 6. Usa emojis moderadamente (2-3)
 
@@ -688,7 +720,37 @@ ANALIZA LA IMAGEN Y RESPONDE:`;
 
       } else {
         // Procesar solo texto
-        const prompt = `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
+        const prompt = ticket.tipo === 'reclutamiento'
+          ? `Eres un asistente AUTÓNOMO de reclutamiento para Ea$y Esports, equipo competitivo de Call of Duty Warzone.
+
+CONTEXTO:
+- Usuario: ${message.author.username}
+- Mensaje: ${message.content}
+
+HISTORIAL:
+${history}
+
+REQUISITOS PARA APROBAR:
+- KD mínimo: 3.0
+- Enviar captura de estadísticas completas de Warzone
+- Tener 48 horas para completar pruebas
+
+TU TRABAJO:
+1. Si el usuario pregunta requisitos: Explícalos claramente
+2. Si el usuario dice su ID de Activision SIN captura: Pide **OBLIGATORIO** captura de estadísticas completas
+3. Si detectas que ya envió captura anteriormente en el historial: Analízala y decide
+4. Si el usuario cumple requisitos: **APROBADO** ✅
+5. Si NO cumple: **RECHAZADO** ❌
+
+REGLAS ESTRICTAS:
+- NO digas "revisaremos en base de datos" - NO tienes acceso a ninguna base de datos
+- NO inventes que puedes consultar stats por ID - NO puedes
+- SIEMPRE pide captura de pantalla de estadísticas in-game
+- NO digas "el staff revisará" - TÚ tomas la decisión final
+- Sé claro, directo y profesional
+
+RESPONDE AHORA (máximo 150 palabras):`
+          : `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
 
 CONTEXTO DEL TICKET:
 - Tipo: ${tipoTicket}
@@ -700,12 +762,11 @@ ${history}
 
 INSTRUCCIONES:
 1. Responde de manera profesional, amigable y concisa
-2. Si es un ticket de reclutamiento, enfócate en requisitos (KD 3.0 mínimo, pruebas en 48h)
-3. Si es soporte, proporciona soluciones claras
-4. Usa emojis moderadamente (máximo 2-3)
-5. Si no puedes resolver algo, indica que el staff lo revisará pronto
-6. Máximo 200 palabras
-7. No uses formato markdown de código (\`\`\`)
+2. Si es soporte técnico, proporciona soluciones claras
+3. Usa emojis moderadamente (máximo 2-3)
+4. Para problemas complejos, indica que el staff lo revisará
+5. Máximo 150 palabras
+6. No uses formato markdown de código (\`\`\`)
 
 RESPONDE AHORA:`;
 
@@ -719,6 +780,54 @@ RESPONDE AHORA:`;
         content: responseText,
         allowedMentions: { repliedUser: false }
       });
+
+      // Si es ticket de reclutamiento y la IA tomó una decisión, notificar al staff
+      if (ticket.tipo === 'reclutamiento') {
+        const decision = responseText.toUpperCase();
+        
+        if (decision.includes('**APROBADO**') || decision.includes('APROBADO ✅')) {
+          // Notificar al staff con embed verde
+          const staffRoles = getStaffRoles();
+          const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
+          
+          const approvedEmbed = new EmbedBuilder()
+            .setColor('#00ff00')
+            .setTitle('✅ CANDIDATO APROBADO POR IA')
+            .setDescription(`El usuario ${message.author} ha sido **APROBADO** automáticamente por el sistema de IA.`)
+            .addFields(
+              { name: '👤 Usuario', value: `${message.author.tag}`, inline: true },
+              { name: '📊 Estado', value: 'Cumple requisitos (KD >= 3.0)', inline: true },
+              { name: '⏭️ Siguiente paso', value: 'Hacer prueba en partida o cerrar ticket', inline: false }
+            )
+            .setTimestamp();
+
+          await message.channel.send({
+            content: `${mentionStaff} - Nuevo candidato aprobado`,
+            embeds: [approvedEmbed]
+          });
+
+        } else if (decision.includes('**RECHAZADO**') || decision.includes('RECHAZADO ❌')) {
+          // Notificar al staff con embed rojo
+          const staffRoles = getStaffRoles();
+          const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
+          
+          const rejectedEmbed = new EmbedBuilder()
+            .setColor('#ff0000')
+            .setTitle('❌ CANDIDATO RECHAZADO POR IA')
+            .setDescription(`El usuario ${message.author} ha sido **RECHAZADO** automáticamente por el sistema de IA.`)
+            .addFields(
+              { name: '👤 Usuario', value: `${message.author.tag}`, inline: true },
+              { name: '📊 Estado', value: 'No cumple requisitos (KD < 3.0)', inline: true },
+              { name: '⏭️ Siguiente paso', value: 'Cerrar ticket con mensaje de rechazo', inline: false }
+            )
+            .setTimestamp();
+
+          await message.channel.send({
+            content: `${mentionStaff} - Candidato rechazado`,
+            embeds: [rejectedEmbed]
+          });
+        }
+      }
 
     } catch (error) {
       console.error('Error en respuesta automática IA:', error);
