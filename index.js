@@ -1897,8 +1897,9 @@ client.on('interactionCreate', async interaction => {
 
     // Mostrar pregunta de esta tarea
     if (taskQ) {
-      const answerButtons = new ActionRowBuilder().addComponents(
-        ...taskQ.a.map((answer, idx) => 
+      // Crear botones en filas separadas para compatibilidad móvil
+      const buttonRows = taskQ.a.map((answer, idx) => 
+        new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`work_taskanswer_${userId}_${jobId}_${shift}_${correctBonus}_${tasksCompleted}_${taskNum}_${idx}_${taskQ.correct}`)
             .setLabel(answer)
@@ -1912,7 +1913,7 @@ client.on('interactionCreate', async interaction => {
         .setDescription(taskQ.q)
         .setFooter({ text: `Tarea ${taskNum}/3 | Responde para continuar` });
 
-      return await interaction.update({ embeds: [embed], components: [answerButtons] });
+      return await interaction.update({ embeds: [embed], components: buttonRows });
     }
 
     if (newTasksCompleted < 3) {
