@@ -625,13 +625,27 @@ client.on('messageCreate', async (message) => {
 
   // Sistema de respuesta automática con IA en tickets
   if (ticket && ticket.status === 'open' && aiModel) {
-    // Solo responder a usuarios normales (NO a staff)
+    // Solo responder al usuario que creó el ticket (NO a staff ni otros usuarios)
     const staffRoles = getStaffRoles();
     const isStaff = message.member?.roles?.cache?.some(role => staffRoles.includes(role.id)) || 
                     message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+    const isTicketOwner = message.author.id === ticket.userId;
     
-    // Si es staff, no responder
-    if (isStaff) return;
+    // Si es staff o NO es el dueño del ticket, no responder
+    if (isStaff || !isTicketOwner) return;
+
+    // Verificar si hay staff activo en el ticket (mensajes del staff en los últimos 5 minutos)
+    const recentMessages = await message.channel.messages.fetch({ limit: 10 });
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+    const staffIsActive = Array.from(recentMessages.values()).some(msg => {
+      if (msg.createdTimestamp < fiveMinutesAgo) return false;
+      const msgIsStaff = msg.member?.roles?.cache?.some(role => staffRoles.includes(role.id)) || 
+                         msg.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      return msgIsStaff && !msg.author.bot;
+    });
+
+    // Si hay staff atendiendo activamente, no responder con IA
+    if (staffIsActive) return;
 
     try {
       // Indicar que está escribiendo
