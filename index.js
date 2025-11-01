@@ -864,8 +864,9 @@ RESPONDE AHORA:`;
         allowedMentions: { repliedUser: false }
       });
 
-      // Si es ticket de reclutamiento y la IA tomó una decisión FINAL (2 capturas), notificar al Líder de Pruebas
-      if (ticket.tipo === 'reclutamiento' && imageCount >= 2) {
+      // Si es ticket de reclutamiento y la IA tomó una decisión FINAL, notificar al Líder de Pruebas
+      // Detectar decisión por palabra clave, no por cantidad de imágenes (puede enviar 2 juntas)
+      if (ticket.tipo === 'reclutamiento') {
         const decision = responseText.toUpperCase();
         
         if (decision.includes('APROBACIÓN_CONFIRMADA') || decision.includes('BIENVENIDO AL PROCESO')) {
