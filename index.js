@@ -1904,8 +1904,7 @@ client.on('interactionCreate', async interaction => {
         .addOptions(
           taskQ.a.map((answer, idx) => ({
             label: answer,
-            value: `${idx}`,
-            emoji: idx === taskQ.correct ? '✅' : '❓'
+            value: `${idx}`
           }))
         );
 
