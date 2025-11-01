@@ -3824,12 +3824,26 @@ client.on('interactionCreate', async interaction => {
         await interaction.editReply({ embeds: [loadingEmbed] });
         await new Promise(resolve => setTimeout(resolve, 1500));
 
-        const challengerDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
-        const opponentDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
-        const challengerSum = challengerDice.reduce((a, b) => a + b, 0);
-        const opponentSum = opponentDice.reduce((a, b) => a + b, 0);
+        let challengerDice, opponentDice, challengerSum, opponentSum;
+        let rolls = 0;
+        let maxRolls = 3;
 
-        loadingEmbed.setDescription(`🎲 **Resultados:**\n\n${challenger.username}: [${challengerDice[0]}] [${challengerDice[1]}] = **${challengerSum}**\n${opponent.username}: [${opponentDice[0]}] [${opponentDice[1]}] = **${opponentSum}**`);
+        // Relanzar en caso de empate
+        do {
+          rolls++;
+          challengerDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+          opponentDice = [Math.floor(Math.random() * 6) + 1, Math.floor(Math.random() * 6) + 1];
+          challengerSum = challengerDice.reduce((a, b) => a + b, 0);
+          opponentSum = opponentDice.reduce((a, b) => a + b, 0);
+
+          if (challengerSum === opponentSum && rolls < maxRolls) {
+            loadingEmbed.setDescription(`🎲 **¡EMPATE en lanzamiento ${rolls}!**\n\nAmbos: **${challengerSum}**\n\n⚡ Relanzando dados...`);
+            await interaction.editReply({ embeds: [loadingEmbed] });
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        } while (challengerSum === opponentSum && rolls < maxRolls);
+
+        loadingEmbed.setDescription(`🎲 **Resultados:**\n\n${challenger.username}: [${challengerDice[0]}] [${challengerDice[1]}] = **${challengerSum}**\n${opponent.username}: [${opponentDice[0]}] [${opponentDice[1]}] = **${opponentSum}**${rolls > 1 ? `\n\n📊 Relanzamientos: ${rolls - 1}` : ''}`);
         await interaction.editReply({ embeds: [loadingEmbed] });
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -3840,11 +3854,11 @@ client.on('interactionCreate', async interaction => {
           winner = duel.opponent;
           loser = duel.challenger;
         } else {
-          // Empate - ganador aleatorio
+          // Si después de 3 lanzamientos sigue empate (raro), ganador aleatorio
           winner = Math.random() < 0.5 ? duel.challenger : duel.opponent;
           loser = winner === duel.challenger ? duel.opponent : duel.challenger;
         }
-        resultDetails = `${challenger.username}: **${challengerSum}** | ${opponent.username}: **${opponentSum}**`;
+        resultDetails = `${challenger.username}: **${challengerSum}** | ${opponent.username}: **${opponentSum}**${rolls > 1 ? ` (${rolls} lanzamientos)` : ''}`;
 
       } else if (gameType === 'blackjack') {
         loadingEmbed.setDescription('🃏 **Repartiendo cartas...**');
