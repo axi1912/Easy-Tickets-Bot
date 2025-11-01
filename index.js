@@ -1,10 +1,24 @@
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionFlagsBits, REST, Routes, StringSelectMenuBuilder } = require('discord.js');
 const fs = require('fs');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
+
+// Inicializar Gemini AI con Vision (solo si hay API key)
+let genAI = null;
+let aiModel = null;
+let aiVisionModel = null;
+if (process.env.GEMINI_API_KEY) {
+  genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  aiModel = genAI.getGenerativeModel({ model: 'gemini-pro' });
+  aiVisionModel = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
+  console.log('✅ Gemini AI activado (texto + visión)');
+} else {
+  console.log('⚠️ GEMINI_API_KEY no encontrada - IA desactivada');
+}
 
 // Archivo de tickets
 const TICKETS_FILE = './tickets.json';
@@ -600,6 +614,113 @@ client.on('messageCreate', async (message) => {
   if (ticket && ticket.userId === message.author.id && ticket.status === 'open') {
     ticket.lastUserActivity = Date.now();
     saveTickets(tickets);
+  }
+
+  // Sistema de respuesta automática con IA en tickets
+  if (ticket && ticket.status === 'open' && aiModel) {
+    // Solo responder si el mensaje es del usuario (no del staff)
+    const staffRoles = getStaffRoles();
+    const isStaff = message.member?.roles?.cache?.some(role => staffRoles.includes(role.id)) || 
+                    message.member?.permissions?.has(PermissionFlagsBits.Administrator);
+    
+    if (isStaff) return; // No responder si es staff
+
+    try {
+      // Indicar que está escribiendo
+      await message.channel.sendTyping();
+
+      // Verificar si hay imágenes en el mensaje
+      const hasImages = message.attachments.size > 0 && 
+                        message.attachments.some(att => att.contentType?.startsWith('image/'));
+
+      // Obtener historial del ticket (últimos 10 mensajes)
+      const messages = await message.channel.messages.fetch({ limit: 10 });
+      const history = messages
+        .reverse()
+        .map(m => `${m.author.bot ? 'Bot' : 'Usuario'}: ${m.content}`)
+        .join('\n');
+
+      // Determinar tipo de ticket
+      const tipoTicket = ticket.tipo === 'reclutamiento' ? 'Reclutamiento' : 'Soporte Técnico';
+
+      let result;
+
+      if (hasImages && aiVisionModel) {
+        // Usar Gemini Vision para analizar imágenes
+        const imageAttachment = Array.from(message.attachments.values())
+          .find(att => att.contentType?.startsWith('image/'));
+
+        // Descargar imagen
+        const response = await fetch(imageAttachment.url);
+        const buffer = await response.arrayBuffer();
+        const base64Image = Buffer.from(buffer).toString('base64');
+
+        const prompt = `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
+
+CONTEXTO DEL TICKET:
+- Tipo: ${tipoTicket}
+- Usuario: ${message.author.username}
+- Mensaje: ${message.content || 'Usuario envió una imagen'}
+
+INSTRUCCIONES:
+1. Analiza la imagen detalladamente
+2. Si es una captura de estadísticas: verifica KD, wins, nivel, torneos
+   - KD mínimo requerido: 3.0
+   - Comenta si cumple o no con los requisitos
+3. Si es una captura de torneo: verifica posición, premio, fecha
+4. Si es gameplay: comenta sobre la calidad de juego visible
+5. Responde profesionalmente y conciso (máximo 150 palabras)
+6. Usa emojis moderadamente (2-3)
+
+ANALIZA LA IMAGEN Y RESPONDE:`;
+
+        const imagePart = {
+          inlineData: {
+            data: base64Image,
+            mimeType: imageAttachment.contentType
+          }
+        };
+
+        result = await aiVisionModel.generateContent([prompt, imagePart]);
+
+      } else {
+        // Usar Gemini Pro para texto
+        const prompt = `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
+
+CONTEXTO DEL TICKET:
+- Tipo: ${tipoTicket}
+- Usuario: ${message.author.username}
+- Pregunta actual: ${message.content}
+
+HISTORIAL DE CONVERSACIÓN:
+${history}
+
+INSTRUCCIONES:
+1. Responde de manera profesional, amigable y concisa
+2. Si es un ticket de reclutamiento, enfócate en requisitos (KD 3.0 mínimo, pruebas en 48h)
+3. Si es soporte, proporciona soluciones claras
+4. Usa emojis moderadamente (máximo 2-3)
+5. Si no puedes resolver algo, indica que el staff lo revisará pronto
+6. Máximo 200 palabras
+7. No uses formato markdown de código (\`\`\`)
+
+RESPONDE AHORA:`;
+
+        result = await aiModel.generateContent(prompt);
+      }
+
+      const responseText = result.response.text();
+
+      // Enviar respuesta
+      await message.reply({
+        content: responseText,
+        allowedMentions: { repliedUser: false }
+      });
+
+    } catch (error) {
+      console.error('Error en respuesta automática IA:', error);
+      // Silenciosamente fallar - el staff puede responder manualmente
+    }
   }
 
   // Buscar si el usuario tiene un juego activo
