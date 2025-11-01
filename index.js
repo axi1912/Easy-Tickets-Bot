@@ -636,10 +636,21 @@ client.on('messageCreate', async (message) => {
       const hasImages = message.attachments.size > 0 && 
                         message.attachments.some(att => att.contentType?.startsWith('image/'));
 
-      // Obtener historial del ticket (últimos 10 mensajes)
-      const messages = await message.channel.messages.fetch({ limit: 10 });
-      const history = messages
-        .reverse()
+      // Obtener historial del ticket (últimos 20 mensajes)
+      const messages = await message.channel.messages.fetch({ limit: 20 });
+      const messagesArray = Array.from(messages.values()).reverse();
+      
+      // Contar imágenes previas del usuario (no del bot)
+      const userImages = messagesArray.filter(m => 
+        !m.author.bot && 
+        m.author.id === message.author.id &&
+        m.attachments.size > 0 &&
+        m.attachments.some(att => att.contentType?.startsWith('image/'))
+      );
+      
+      const imageCount = userImages.length;
+
+      const history = messagesArray
         .map(m => `${m.author.bot ? 'Bot' : 'Usuario'}: ${m.content}`)
         .join('\n');
 
@@ -659,39 +670,71 @@ client.on('messageCreate', async (message) => {
         const base64Image = Buffer.from(buffer).toString('base64');
 
         const prompt = ticket.tipo === 'reclutamiento' 
-          ? `Eres un asistente AUTÓNOMO de reclutamiento para Ea$y Esports, equipo competitivo de Call of Duty Warzone.
+          ? `Eres un reclutador profesional de Ea$y Esports. Tono amigable pero siempre profesional. NUNCA uses formatos robóticos ni lenguaje informal.
 
 CONTEXTO:
 - Usuario: ${message.author.username}
-- Mensaje: ${message.content || 'Usuario envió una imagen'}
+- Capturas recibidas: ${imageCount}/2
+- Requisito: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
 
-TU TRABAJO:
-1. ANALIZA la imagen con máximo detalle
-2. Si es captura de estadísticas de Warzone:
-   - Busca el KD (K/D Ratio) - DEBE ser >= 3.0 para aprobar
-   - Verifica wins, partidas jugadas, nivel
-   - Revisa si hay logros o torneos destacados
-3. TOMA UNA DECISIÓN FINAL:
-   - Si KD >= 3.0 y stats decentes: **APROBADO** ✅
-   - Si KD < 3.0 o stats insuficientes: **RECHAZADO** ❌
-   - Si la imagen NO muestra stats claras: Pide captura de estadísticas completas
+VALIDACIONES CRÍTICAS:
+1. Si la imagen está borrosa/no se ve el KD claramente:
+   "No puedo visualizar el KD claramente en esta captura. Por favor, envía una imagen más nítida donde se vea el número con claridad."
 
-FORMATO DE RESPUESTA:
----
-[Análisis breve de las estadísticas que ves]
+2. MODO INCORRECTO - Si detectas que es modo NORMAL (no ranked):
+   "⚠️ Esta captura corresponde a [Resurgimiento/Battle Royale] en modo normal, no ranked.
+   
+   Necesitas acceder a tu perfil y buscar específicamente:
+   • Resurgimiento Ranked (tiene icono de división/clasificación)
+   • Battle Royale Ranked (tiene icono de división/clasificación)
+   
+   Solo se aceptan estadísticas de modos ranked para el proceso de selección."
 
-**DECISIÓN: [APROBADO/RECHAZADO/NECESITA MÁS INFO]**
+3. Si es screenshot random/no relacionado con stats:
+   "Necesito ver tus estadísticas de Warzone en modo Ranked.
+   Por favor accede a tu perfil → Ranked → y envía capturas de Resurgimiento Ranked y Battle Royale Ranked."
 
-[Razón de la decisión en 1-2 líneas]
----
+IDENTIFICACIÓN ESTRICTA:
+- BUSCA texto exacto: "Ranked", "Classification", "Clasificación"
+- BUSCA iconos: división, tier, emblema de ranked
+- Si SOLO ves KD sin indicadores de ranked → ES MODO NORMAL ❌
+- Verifica que sea Resurgimiento o Battle Royale (no Plunder/otros)
+- Lee el KD exacto si es ranked válido
 
-IMPORTANTE:
-- NO inventes datos que no ves en la imagen
-- NO digas "el staff revisará" - TÚ decides
-- Sé específico sobre qué ves en la captura
-- Si apruebas, felicítalo. Si rechazas, sé respetuoso pero firme.
+RESPUESTAS PROFESIONALES (SIEMPRE menciona "Ranked"):
 
-ANALIZA Y DECIDE AHORA:`
+   PRIMERA CAPTURA VÁLIDA (${imageCount}===1 y SÍ es ranked):
+   "Perfecto, he recibido tus estadísticas de **[Resurgimiento/Battle Royale] Ranked**.
+   KD registrado: [X.X]
+   
+   Por favor envía la captura del otro modo ranked ([Resurgimiento Ranked/Battle Royale Ranked]) para completar el análisis."
+
+   SEGUNDA CAPTURA VÁLIDA (${imageCount}===2 y AMBAS son ranked):
+   
+   SI AMBOS KD >= 3.0:
+   "Excelente. He revisado tus estadísticas completas:
+   • **Resurgimiento Ranked**: KD [X.X]
+   • **Battle Royale Ranked**: KD [Y.Y]
+   
+   Cumples con los requisitos establecidos (KD 3.0+ en ambos modos ranked). Has sido aceptado para el proceso de selección.
+   El equipo te contactará próximamente para coordinar las pruebas. Dispones de 48 horas para completarlas."
+   [APROBACIÓN_CONFIRMADA]
+
+   SI ALGÚN KD < 3.0:
+   "He revisado tus estadísticas ranked:
+   • **Resurgimiento Ranked**: KD [X.X]  
+   • **Battle Royale Ranked**: KD [Y.Y]
+   
+   Lamentablemente no cumples con el requisito mínimo de KD 3.0 en ambos modos ranked. Te invitamos a seguir mejorando y postular nuevamente cuando alcances el estándar requerido."
+   [RECHAZO_CONFIRMADO]
+
+REGLAS ESTRICTAS:
+- SIEMPRE escribe "Ranked" al mencionar los modos
+- NO uses lenguaje informal (bro, ey, etc)
+- NO aceptes Resurgimiento Normal ni Battle Royale Normal
+- Si dudas si es ranked, pide aclaración
+- NO inventes números
+- Máximo 120 palabras`
           : `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
 
 CONTEXTO DEL TICKET:
@@ -721,35 +764,42 @@ ANALIZA LA IMAGEN Y RESPONDE:`;
       } else {
         // Procesar solo texto
         const prompt = ticket.tipo === 'reclutamiento'
-          ? `Eres un asistente AUTÓNOMO de reclutamiento para Ea$y Esports, equipo competitivo de Call of Duty Warzone.
+          ? `Eres un reclutador profesional de Ea$y Esports. Tono amigable pero siempre profesional.
 
 CONTEXTO:
 - Usuario: ${message.author.username}
 - Mensaje: ${message.content}
+- Capturas enviadas: ${imageCount}/2
 
 HISTORIAL:
 ${history}
 
-REQUISITOS PARA APROBAR:
-- KD mínimo: 3.0
-- Enviar captura de estadísticas completas de Warzone
-- Tener 48 horas para completar pruebas
+REQUISITOS:
+- KD 3.0+ en Resurgimiento Ranked Y Battle Royale Ranked
+- 2 capturas de pantalla obligatorias (modos ranked únicamente)
+- 48h para completar pruebas después de aprobación
 
-TU TRABAJO:
-1. Si el usuario pregunta requisitos: Explícalos claramente
-2. Si el usuario dice su ID de Activision SIN captura: Pide **OBLIGATORIO** captura de estadísticas completas
-3. Si detectas que ya envió captura anteriormente en el historial: Analízala y decide
-4. Si el usuario cumple requisitos: **APROBADO** ✅
-5. Si NO cumple: **RECHAZADO** ❌
+RESPONDE PROFESIONALMENTE:
 
-REGLAS ESTRICTAS:
-- NO digas "revisaremos en base de datos" - NO tienes acceso a ninguna base de datos
-- NO inventes que puedes consultar stats por ID - NO puedes
-- SIEMPRE pide captura de pantalla de estadísticas in-game
-- NO digas "el staff revisará" - TÚ tomas la decisión final
-- Sé claro, directo y profesional
+Si pregunta requisitos:
+"Los requisitos para unirte al equipo son:
+• KD mínimo 3.0 en Resurgimiento Ranked
+• KD mínimo 3.0 en Battle Royale Ranked  
+• Enviar capturas de ambas estadísticas ranked
+Una vez aprobado, dispondrás de 48 horas para completar las pruebas."
 
-RESPONDE AHORA (máximo 150 palabras):`
+Si solo proporciona ID de Activision:
+"Gracias por tu ID de Activision. Sin embargo, necesito que envíes capturas de pantalla de tus estadísticas en modo ranked (Resurgimiento Ranked y Battle Royale Ranked). No tengo acceso a consultas por ID, por favor proporciona screenshots de las estadísticas."
+
+Si faltan capturas:
+"Has enviado ${imageCount}/2 capturas requeridas. Por favor envía también las estadísticas del [modo ranked que falta] para completar el análisis."
+
+IMPORTANTE:
+- Lenguaje profesional, sin informalidades
+- NO inventes que puedes consultar bases de datos
+- Solicita siempre capturas visuales
+- Especifica que deben ser modos RANKED
+- Máximo 100 palabras`
           : `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
 
 CONTEXTO DEL TICKET:
@@ -781,49 +831,51 @@ RESPONDE AHORA:`;
         allowedMentions: { repliedUser: false }
       });
 
-      // Si es ticket de reclutamiento y la IA tomó una decisión, notificar al staff
-      if (ticket.tipo === 'reclutamiento') {
+      // Si es ticket de reclutamiento y la IA tomó una decisión FINAL (2 capturas), notificar al staff
+      if (ticket.tipo === 'reclutamiento' && imageCount >= 2) {
         const decision = responseText.toUpperCase();
         
-        if (decision.includes('**APROBADO**') || decision.includes('APROBADO ✅')) {
-          // Notificar al staff con embed verde
+        if (decision.includes('APROBACIÓN_CONFIRMADA') || decision.includes('BIENVENIDO AL PROCESO')) {
+          // Notificar al staff con embed verde (discreto, sin mencionar IA)
           const staffRoles = getStaffRoles();
           const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
           
           const approvedEmbed = new EmbedBuilder()
             .setColor('#00ff00')
-            .setTitle('✅ CANDIDATO APROBADO POR IA')
-            .setDescription(`El usuario ${message.author} ha sido **APROBADO** automáticamente por el sistema de IA.`)
+            .setTitle('✅ Nuevo Candidato Aprobado')
+            .setDescription(`El usuario ${message.author} ha pasado la revisión inicial de estadísticas.`)
             .addFields(
               { name: '👤 Usuario', value: `${message.author.tag}`, inline: true },
-              { name: '📊 Estado', value: 'Cumple requisitos (KD >= 3.0)', inline: true },
-              { name: '⏭️ Siguiente paso', value: 'Hacer prueba en partida o cerrar ticket', inline: false }
+              { name: '📊 Requisitos', value: 'KD >= 3.0 en ambos modos ✅', inline: true },
+              { name: '⏭️ Siguiente paso', value: 'Coordinar prueba en partida', inline: false }
             )
+            .setFooter({ text: 'Revisión automática de estadísticas' })
             .setTimestamp();
 
           await message.channel.send({
-            content: `${mentionStaff} - Nuevo candidato aprobado`,
+            content: `${mentionStaff}`,
             embeds: [approvedEmbed]
           });
 
-        } else if (decision.includes('**RECHAZADO**') || decision.includes('RECHAZADO ❌')) {
-          // Notificar al staff con embed rojo
+        } else if (decision.includes('RECHAZO_CONFIRMADO') || decision.includes('NO CUMPLE') || decision.includes('LAMENTABLEMENTE')) {
+          // Notificar al staff con embed rojo (discreto)
           const staffRoles = getStaffRoles();
           const mentionStaff = staffRoles.map(roleId => `<@&${roleId}>`).join(' ');
           
           const rejectedEmbed = new EmbedBuilder()
             .setColor('#ff0000')
-            .setTitle('❌ CANDIDATO RECHAZADO POR IA')
-            .setDescription(`El usuario ${message.author} ha sido **RECHAZADO** automáticamente por el sistema de IA.`)
+            .setTitle('❌ Candidato No Cumple Requisitos')
+            .setDescription(`El usuario ${message.author} no alcanza el KD mínimo requerido tras revisar ambos modos ranked.`)
             .addFields(
               { name: '👤 Usuario', value: `${message.author.tag}`, inline: true },
-              { name: '📊 Estado', value: 'No cumple requisitos (KD < 3.0)', inline: true },
-              { name: '⏭️ Siguiente paso', value: 'Cerrar ticket con mensaje de rechazo', inline: false }
+              { name: '📊 Estado', value: 'KD insuficiente (< 3.0)', inline: true },
+              { name: '⏭️ Siguiente paso', value: 'Cerrar ticket', inline: false }
             )
+            .setFooter({ text: 'Revisión automática de estadísticas' })
             .setTimestamp();
 
           await message.channel.send({
-            content: `${mentionStaff} - Candidato rechazado`,
+            content: `${mentionStaff}`,
             embeds: [rejectedEmbed]
           });
         }
