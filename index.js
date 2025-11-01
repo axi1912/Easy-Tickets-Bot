@@ -825,7 +825,7 @@ client.on('interactionCreate', async interaction => {
         },
         { 
           name: '⚠️ Importante:', 
-          value: '> Las pruebas deben ser **claras y verificables**\n> Puedes subir imágenes directamente o compartir enlaces\n> El Staff revisará tu postulación una vez envíes las pruebas',
+          value: '> Las pruebas deben ser **claras y verificables**\n> Puedes subir imágenes directamente o compartir enlaces\n> El Staff revisará tu postulación una vez envíes las pruebas\n> **K/D mínimo requerido: 3.0**\n> ⏰ Tienes **48 horas** para enviar las pruebas o el ticket se cerrará automáticamente',
           inline: false 
         },
         { 
@@ -999,7 +999,7 @@ client.on('interactionCreate', async interaction => {
     const embed = new EmbedBuilder()
       .setColor('#00FF00')
       .setTitle('⚔️ Reclutamiento Ea$y')
-      .setDescription('¿Quieres unirte a **Ea$y Esports**? Completa tu solicitud y el Staff la revisará.\n\nRecuerda que buscamos jugadores **activos, competitivos y con disciplina**.\n📌 **Formato obligatorio de postulación:**\n\n• 🎮 **Activision ID**\n\n• 🎯 **Rol de juego** (🔵 Ancla / 🔴 IGL / 🟡 Support / 🟢 Fragger)\n\n• 🔫 **KD** / WZRank, Resurgimiento, BattleRoyale.\n\n• ⏰ **Disponibilidad** (días/horas)\n\n• 🏆 **Torneos ganados:** (indica cuántos has participado y ganado, pruebas)\n\n• 🎬 **Pruebas:** clips, VODs o capturas de tus jugadas\n\n• 👤 **Breve presentación personal**')
+      .setDescription('¿Quieres unirte a **Ea$y Esports**? Completa tu solicitud y el Staff la revisará.\n\nRecuerda que buscamos jugadores **activos, competitivos y con disciplina**.\n📌 **Formato obligatorio de postulación:**\n\n• 🎮 **Activision ID**\n\n• 🎯 **Rol de juego** (🔵 Ancla / 🔴 IGL / 🟡 Support / 🟢 Fragger)\n\n• 🔫 **KD** / WZRank, Resurgimiento, BattleRoyale.\n\n• ⏰ **Disponibilidad** (días/horas)\n\n• 🏆 **Torneos ganados:** (indica cuántos has participado y ganado, pruebas)\n\n• 🎬 **Pruebas:** clips, VODs o capturas de tus jugadas\n\n• 👤 **Breve presentación personal**\n\n⚠️ **REQUISITOS MÍNIMOS:**\n• K/D mínimo: **3.0**\n• Debes enviar **pruebas** (capturas/clips) en **48 horas** o el ticket se cerrará automáticamente')
       .setImage('https://cdn.discordapp.com/attachments/1309783318031503384/1431136085756608644/Fondo_1_3.png')
       .setFooter({ text: '© Ea$y Esports | Sistema de Reclutamiento' });
 
