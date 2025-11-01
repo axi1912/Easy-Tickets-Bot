@@ -679,8 +679,13 @@ client.on('messageCreate', async (message) => {
 
 CONTEXTO:
 - Usuario: ${message.author.username}
-- Capturas recibidas: ${imageCount}/2
-- Requisito: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
+- Esta es la captura número: ${imageCount}
+- Total requerido: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
+
+HISTORIAL DEL TICKET (últimos mensajes):
+${history}
+
+⚠️ IMPORTANTE: Si ya hay 2 capturas en el historial, debes analizarlas AMBAS ahora y tomar decisión final.
 
 VALIDACIONES CRÍTICAS:
 1. Si la imagen está borrosa/no se ve el KD claramente:
@@ -706,15 +711,24 @@ IDENTIFICACIÓN ESTRICTA:
 - Verifica que sea Resurgimiento o Battle Royale (no Plunder/otros)
 - Lee el KD exacto si es ranked válido
 
-RESPUESTAS PROFESIONALES (SIEMPRE menciona "Ranked"):
+INSTRUCCIONES DE RESPUESTA:
 
-   PRIMERA CAPTURA VÁLIDA (${imageCount}===1 y SÍ es ranked):
-   "Perfecto, he recibido tus estadísticas de **[Resurgimiento/Battle Royale] Ranked**.
-   KD registrado: [X.X]
-   
-   Por favor envía la captura del otro modo ranked ([Resurgimiento Ranked/Battle Royale Ranked]) para completar el análisis."
+   SI ES LA PRIMERA CAPTURA (imageCount = 1):
+   1. Analiza esta captura actual
+   2. Verifica que sea Ranked (no modo normal)
+   3. Lee el KD
+   4. Responde: "Perfecto, he recibido tus estadísticas de **[Resurgimiento/Battle Royale] Ranked**.
+      KD registrado: [X.X]
+      
+      Por favor envía la captura del otro modo ranked ([Resurgimiento Ranked/Battle Royale Ranked]) para completar el análisis."
 
-   SEGUNDA CAPTURA VÁLIDA (${imageCount}===2 y AMBAS son ranked):
+   SI ES LA SEGUNDA CAPTURA O MÁS (imageCount >= 2):
+   1. Analiza la captura actual
+   2. REVISA EL HISTORIAL y busca la otra captura que envió antes
+   3. Identifica los KD de AMBAS capturas:
+      - Una debe ser Resurgimiento Ranked
+      - La otra Battle Royale Ranked
+   4. TOMA DECISIÓN FINAL:
    
    SI AMBOS KD >= 3.0:
    "Excelente. He revisado tus estadísticas completas:
