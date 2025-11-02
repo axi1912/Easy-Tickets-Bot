@@ -5290,14 +5290,48 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
   }
 
-  // CRIPTO - Sistema de trading
+  // CRIPTO - Sistema de trading realista (estilo Altcoin)
   function getCryptoPrice() {
+    const now = Date.now();
     const hour = new Date().getHours();
     const minute = new Date().getMinutes();
-    const seed = hour * 60 + minute; // Cambia cada minuto para más volatilidad
+    const day = new Date().getDate();
     
-    const random = Math.abs(Math.sin(seed) * 10000) % 100;
-    return Math.floor(50 + random * 5); // 50-550 coins por EasyCoin
+    // Precio base que cambia cada minuto (5,000 - 150,000)
+    const seed = hour * 60 + minute + day * 1440;
+    const baseRandom = Math.abs(Math.sin(seed) * 10000) % 100;
+    let price = Math.floor(5000 + baseRandom * 1450); // 5,000 - 150,000
+    
+    // Tendencia diaria (alcista o bajista según el día)
+    const trendSeed = day * 7;
+    const trend = Math.sin(trendSeed) * 0.15; // ±15% de tendencia
+    price = Math.floor(price * (1 + trend));
+    
+    // Eventos aleatorios (5% de probabilidad cada minuto)
+    const eventSeed = Math.abs(Math.sin(seed * 2) * 10000) % 100;
+    let eventMessage = null;
+    
+    if (eventSeed < 2) { // 2% Pump masivo
+      price = Math.floor(price * 1.4); // +40%
+      eventMessage = '🚀 ¡PUMP! Ballenas comprando EasyCoin';
+    } else if (eventSeed < 4) { // 2% Crash
+      price = Math.floor(price * 0.7); // -30%
+      eventMessage = '💥 ¡CRASH! Venta masiva en el mercado';
+    } else if (eventSeed < 6) { // 2% Noticia positiva
+      price = Math.floor(price * 1.2); // +20%
+      eventMessage = '📰 Noticia: Ea$y Esports adoptará EasyCoin oficialmente';
+    } else if (eventSeed < 8) { // 2% FUD
+      price = Math.floor(price * 0.85); // -15%
+      eventMessage = '⚠️ FUD: Rumores de regulación cripto';
+    } else if (eventSeed < 9) { // 1% Elon Tweet
+      price = Math.floor(price * 1.5); // +50%
+      eventMessage = '🐦 Elon tuiteó sobre EasyCoin';
+    }
+    
+    // Asegurar que no baje del mínimo ni supere el máximo
+    price = Math.max(5000, Math.min(150000, price));
+    
+    return { price, event: eventMessage };
   }
 
   // COMPRAR CRIPTO
@@ -5305,7 +5339,8 @@ client.on('interactionCreate', async interaction => {
     const amount = interaction.options.getInteger('cantidad');
     const userData = getUser(interaction.user.id);
 
-    const price = getCryptoPrice();
+    const cryptoData = getCryptoPrice();
+    const price = cryptoData.price;
     const totalCost = price * amount;
 
     if (userData.coins < totalCost) {
@@ -5322,13 +5357,13 @@ client.on('interactionCreate', async interaction => {
     const embed = new EmbedBuilder()
       .setColor('#16a085')
       .setTitle('₿ EasyCoin Comprado')
-      .setDescription(`**${interaction.user.username}** compró criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin`)
+      .setDescription(`**${interaction.user.username}** compró criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
       .addFields(
         { name: '💸 Total Pagado', value: `${totalCost.toLocaleString()} 🪙`, inline: true },
         { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
         { name: '₿ Total EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true }
       )
-      .setFooter({ text: 'El precio cambia cada minuto - Alta volatilidad' })
+      .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
@@ -5346,7 +5381,8 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    const price = getCryptoPrice();
+    const cryptoData = getCryptoPrice();
+    const price = cryptoData.price;
     const totalEarned = price * amount;
 
     userData.coins += totalEarned;
@@ -5356,12 +5392,13 @@ client.on('interactionCreate', async interaction => {
     const embed = new EmbedBuilder()
       .setColor('#27ae60')
       .setTitle('₿ EasyCoin Vendido')
-      .setDescription(`**${interaction.user.username}** vendió criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin`)
+      .setDescription(`**${interaction.user.username}** vendió criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
       .addFields(
         { name: '💰 Total Recibido', value: `${totalEarned.toLocaleString()} 🪙`, inline: true },
         { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
         { name: '₿ EasyCoins restantes', value: `${userData.crypto.easycoins} ₿`, inline: true }
       )
+      .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
@@ -5370,30 +5407,41 @@ client.on('interactionCreate', async interaction => {
   // MERCADO CRIPTO
   if (interaction.isChatInputCommand() && interaction.commandName === 'mercado-cripto') {
     const userData = getUser(interaction.user.id);
-    const price = getCryptoPrice();
+    const cryptoData = getCryptoPrice();
+    const price = cryptoData.price;
     const portfolioValue = userData.crypto.easycoins * price;
 
-    // Simular gráfica de tendencia
+    // Simular gráfica de tendencia (últimos 60 minutos)
     const trend = [];
     for (let i = 5; i >= 0; i--) {
-      const pastSeed = (new Date().getHours() * 60 + new Date().getMinutes()) - i * 10;
-      const pastPrice = Math.floor(50 + (Math.abs(Math.sin(pastSeed) * 10000) % 100) * 5);
+      const pastMinutes = (new Date().getHours() * 60 + new Date().getMinutes()) - i * 10;
+      const pastDay = Math.floor((Date.now() - i * 10 * 60 * 1000) / (1000 * 60 * 60 * 24));
+      const pastTrend = Math.sin(pastDay * 0.5) * 0.15;
+      const pastVolatility = Math.abs(Math.sin(pastMinutes * 17) * Math.cos(pastMinutes * 13));
+      const pastPrice = Math.floor(50000 + (50000 * pastVolatility) + (100000 * pastTrend));
       trend.push(pastPrice);
     }
     
     const trendEmoji = trend[5] > trend[0] ? '📈' : trend[5] < trend[0] ? '📉' : '➡️';
-    const trendText = trend.map((p, i) => i === 5 ? `**${p}**` : p).join(' → ');
+    const trendText = trend.map((p, i) => i === 5 ? `**${(p/1000).toFixed(1)}K**` : `${(p/1000).toFixed(1)}K`).join(' → ');
+    
+    // Calcular 24h high/low simulado
+    const high24h = Math.max(...trend);
+    const low24h = Math.min(...trend);
 
     const embed = new EmbedBuilder()
-      .setColor('#16a085')
+      .setColor(trendEmoji === '📈' ? '#27ae60' : trendEmoji === '📉' ? '#e74c3c' : '#95a5a6')
       .setTitle('₿ Mercado de EasyCoin')
-      .setDescription(`**Precio actual:** ${price.toLocaleString()} 🪙 por EasyCoin ${trendEmoji}\n\n**Tendencia (últimos 60 min):**\n${trendText}`)
+      .setDescription(`**Precio actual:** ${price.toLocaleString()} 🪙 ${trendEmoji}${cryptoData.event ? '\n\n' + cryptoData.event : ''}\n\n**Tendencia (últimos 60 min):**\n${trendText}`)
       .addFields(
+        { name: '📊 24h High', value: `${high24h.toLocaleString()} 🪙`, inline: true },
+        { name: '📊 24h Low', value: `${low24h.toLocaleString()} 🪙`, inline: true },
+        { name: '📊 Variación 24h', value: `${((high24h - low24h) / low24h * 100).toFixed(1)}%`, inline: true },
         { name: '₿ Tus EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true },
         { name: '💰 Valor del Portafolio', value: `${portfolioValue.toLocaleString()} 🪙`, inline: true },
         { name: '💼 Balance en Wallet', value: `${userData.coins.toLocaleString()} 🪙`, inline: true }
       )
-      .setFooter({ text: '⚠️ Alta volatilidad - El precio cambia cada minuto' })
+      .setFooter({ text: '⚠️ Alta volatilidad - Rango: 5K-150K 🪙 | Precio cambia cada minuto' })
       .setTimestamp();
 
     await interaction.reply({ embeds: [embed] });
