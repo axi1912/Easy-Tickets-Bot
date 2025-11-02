@@ -5350,23 +5350,76 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
+    const confirmEmbed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('₿ Confirmar Compra de EasyCoin')
+      .setDescription(`**Precio ACTUAL:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}\n\n**Vas a comprar:** ${amount} EasyCoins\n**Total a pagar:** ${totalCost.toLocaleString()} 🪙`)
+      .addFields(
+        { name: '💼 Tu Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '💸 Después de comprar', value: `${(userData.coins - totalCost).toLocaleString()} 🪙`, inline: true },
+        { name: '₿ Tendrás', value: `${userData.crypto.easycoins + amount} ₿`, inline: true }
+      )
+      .setFooter({ text: '⚠️ El precio puede cambiar después de esta confirmación' })
+      .setTimestamp();
+
+    const confirmButton = new ButtonBuilder()
+      .setCustomId(`confirm_buy_crypto_${amount}`)
+      .setLabel('✅ Confirmar Compra')
+      .setStyle(ButtonStyle.Success);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId('cancel_buy_crypto')
+      .setLabel('❌ Cancelar')
+      .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+    await interaction.reply({ embeds: [confirmEmbed], components: [row] });
+  }
+
+  // CONFIRMAR COMPRA CRIPTO
+  if (interaction.isButton() && interaction.customId.startsWith('confirm_buy_crypto_')) {
+    const amount = parseInt(interaction.customId.split('_')[3]);
+    const userData = getUser(interaction.user.id);
+
+    const cryptoData = getCryptoPrice();
+    const price = cryptoData.price;
+    const totalCost = price * amount;
+
+    if (userData.coins < totalCost) {
+      return interaction.update({ 
+        content: `❌ Ya no tienes suficientes monedas. El precio cambió a **${price.toLocaleString()}** 🪙 y necesitas: **${totalCost.toLocaleString()}** 🪙`, 
+        embeds: [],
+        components: []
+      });
+    }
+
     userData.coins -= totalCost;
     userData.crypto.easycoins += amount;
     updateUser(interaction.user.id, userData);
 
     const embed = new EmbedBuilder()
       .setColor('#16a085')
-      .setTitle('₿ EasyCoin Comprado')
-      .setDescription(`**${interaction.user.username}** compró criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
+      .setTitle('✅ EasyCoin Comprado')
+      .setDescription(`**${interaction.user.username}** compró criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio final:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
       .addFields(
         { name: '💸 Total Pagado', value: `${totalCost.toLocaleString()} 🪙`, inline: true },
-        { name: '💼 Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
+        { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
         { name: '₿ Total EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true }
       )
       .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // CANCELAR COMPRA CRIPTO
+  if (interaction.isButton() && interaction.customId === 'cancel_buy_crypto') {
+    await interaction.update({ 
+      content: '❌ Compra cancelada. Usa `/mercado-cripto` para ver el precio actual.', 
+      embeds: [], 
+      components: [] 
+    });
   }
 
   // VENDER CRIPTO
@@ -5385,14 +5438,58 @@ client.on('interactionCreate', async interaction => {
     const price = cryptoData.price;
     const totalEarned = price * amount;
 
+    const confirmEmbed = new EmbedBuilder()
+      .setColor('#f39c12')
+      .setTitle('₿ Confirmar Venta de EasyCoin')
+      .setDescription(`**Precio ACTUAL:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}\n\n**Vas a vender:** ${amount} EasyCoins\n**Total a recibir:** ${totalEarned.toLocaleString()} 🪙`)
+      .addFields(
+        { name: '₿ Tus EasyCoins', value: `${userData.crypto.easycoins} ₿`, inline: true },
+        { name: '₿ Después de vender', value: `${userData.crypto.easycoins - amount} ₿`, inline: true },
+        { name: '💰 Tendrás', value: `${(userData.coins + totalEarned).toLocaleString()} 🪙`, inline: true }
+      )
+      .setFooter({ text: '⚠️ El precio puede cambiar después de esta confirmación' })
+      .setTimestamp();
+
+    const confirmButton = new ButtonBuilder()
+      .setCustomId(`confirm_sell_crypto_${amount}`)
+      .setLabel('✅ Confirmar Venta')
+      .setStyle(ButtonStyle.Success);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId('cancel_sell_crypto')
+      .setLabel('❌ Cancelar')
+      .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+    await interaction.reply({ embeds: [confirmEmbed], components: [row] });
+  }
+
+  // CONFIRMAR VENTA CRIPTO
+  if (interaction.isButton() && interaction.customId.startsWith('confirm_sell_crypto_')) {
+    const amount = parseInt(interaction.customId.split('_')[3]);
+    const userData = getUser(interaction.user.id);
+
+    if (userData.crypto.easycoins < amount) {
+      return interaction.update({ 
+        content: `❌ Ya no tienes suficientes EasyCoins. Tienes: **${userData.crypto.easycoins}** ₿`, 
+        embeds: [],
+        components: []
+      });
+    }
+
+    const cryptoData = getCryptoPrice();
+    const price = cryptoData.price;
+    const totalEarned = price * amount;
+
     userData.coins += totalEarned;
     userData.crypto.easycoins -= amount;
     updateUser(interaction.user.id, userData);
 
     const embed = new EmbedBuilder()
       .setColor('#27ae60')
-      .setTitle('₿ EasyCoin Vendido')
-      .setDescription(`**${interaction.user.username}** vendió criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
+      .setTitle('✅ EasyCoin Vendido')
+      .setDescription(`**${interaction.user.username}** vendió criptomonedas!\n\n**Cantidad:** ${amount} EasyCoins\n**Precio final:** ${price.toLocaleString()} 🪙 por EasyCoin${cryptoData.event ? '\n\n' + cryptoData.event : ''}`)
       .addFields(
         { name: '💰 Total Recibido', value: `${totalEarned.toLocaleString()} 🪙`, inline: true },
         { name: '💼 Nuevo Balance', value: `${userData.coins.toLocaleString()} 🪙`, inline: true },
@@ -5401,7 +5498,16 @@ client.on('interactionCreate', async interaction => {
       .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // CANCELAR VENTA CRIPTO
+  if (interaction.isButton() && interaction.customId === 'cancel_sell_crypto') {
+    await interaction.update({ 
+      content: '❌ Venta cancelada. Usa `/mercado-cripto` para ver el precio actual.', 
+      embeds: [], 
+      components: [] 
+    });
   }
 
   // MERCADO CRIPTO
