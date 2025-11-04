@@ -3787,6 +3787,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Este no es tu juego.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM: Evitar múltiples clics simultáneos
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando tu jugada anterior.', flags: 64 });
+    }
+    game.processing = true; // Bloquear el juego mientras se procesa
+
     if (action === 'cashout') {
       const multipliers = [0, 2, 3, 5, 7, 10];
       const multiplier = multipliers[Math.min(game.streak, 5)];
@@ -3818,7 +3824,7 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙 | ¡Excelente decisión!` });
 
-      activeGames.delete(gameId);
+      activeGames.delete(gameId); // El lock se elimina con el juego
       await interaction.update({ embeds: [embed], components: [] });
     } else {
       const nextNumber = Math.floor(Math.random() * 100) + 1;
@@ -3862,6 +3868,7 @@ client.on('interactionCreate', async interaction => {
             .setDisabled(game.streak === 0)
         );
 
+        game.processing = false; // Desbloquear para el siguiente clic
         await interaction.update({ embeds: [embed], components: [buttons] });
       } else {
         const userData = getUser(interaction.user.id);
@@ -3881,7 +3888,7 @@ client.on('interactionCreate', async interaction => {
           )
           .setFooter({ text: '¡No te rindas! Intenta de nuevo' });
 
-        activeGames.delete(gameId);
+        activeGames.delete(gameId); // El lock se elimina con el juego
         await interaction.update({ embeds: [embed], components: [] });
       }
     }
@@ -3985,6 +3992,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== duel.opponent) {
       return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (duel.processing) {
+      return interaction.reply({ content: '⏳ Este duelo ya está siendo procesado.', flags: 64 });
+    }
+    duel.processing = true;
 
     if (action === 'decline') {
       activeGames.delete(duelId);
@@ -5055,6 +5068,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Esta sala está llena.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM: Evitar múltiples joins simultáneos
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera, alguien se está uniendo...', flags: 64 });
+    }
+    game.processing = true;
+
     const userData = getUser(interaction.user.id);
     const requiredBet = game.players[0].bet;
 
@@ -5090,6 +5109,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`👥 **Jugadores:** ${game.players.length}/10\n💰 **Apuesta:** ${requiredBet.toLocaleString()} 🪙\n🏆 **Pozo:** ${game.pot.toLocaleString()} 🪙\n\n**Jugadores unidos:**\n${game.players.map(p => `• ${p.name}`).join('\n')}\n\n*Se requieren mínimo 3 jugadores*`)
       .setFooter({ text: `${interaction.user.username} se unió!` });
 
+    game.processing = false; // Desbloquear para el siguiente jugador
     await interaction.update({ embeds: [embed], components: [joinButton] });
 
     if (game.players.length >= 10) {
@@ -5114,7 +5134,13 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Esta pregunta no es para ti.', flags: 64 });
     }
 
-    activeGames.delete(gameId);
+    // PROTECCIÓN ANTI-SPAM: Evitar múltiples clics simultáneos
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando tu respuesta.', flags: 64 });
+    }
+    game.processing = true; // Bloquear mientras se procesa
+
+    activeGames.delete(gameId); // El lock se elimina con el juego
 
     const userData = getUser(interaction.user.id);
     const won = selectedAnswer === correctAnswer;
@@ -5622,6 +5648,14 @@ client.on('interactionCreate', async interaction => {
   // CONFIRMAR COMPRA CRIPTO
   if (interaction.isButton() && interaction.customId.startsWith('confirm_buy_crypto_')) {
     const amount = parseInt(interaction.customId.split('_')[3]);
+    const gameId = `crypto_buy_${interaction.user.id}_${amount}`;
+    
+    // PROTECCIÓN ANTI-SPAM: Usar gameId temporal para evitar doble compra
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '⏳ Espera... procesando tu compra anterior.', flags: 64 });
+    }
+    activeGames.set(gameId, { userId: interaction.user.id, processing: true });
+
     const userData = getUser(interaction.user.id);
 
     const cryptoData = getCryptoPrice();
@@ -5629,6 +5663,7 @@ client.on('interactionCreate', async interaction => {
     const totalCost = price * amount;
 
     if (userData.coins < totalCost) {
+      activeGames.delete(gameId);
       return interaction.update({ 
         content: `❌ Ya no tienes suficientes monedas. El precio cambió a **${price.toLocaleString()}** 🪙 y necesitas: **${totalCost.toLocaleString()}** 🪙`, 
         embeds: [],
@@ -5652,6 +5687,7 @@ client.on('interactionCreate', async interaction => {
       .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
+    activeGames.delete(gameId); // Eliminar lock
     await interaction.update({ embeds: [embed], components: [] });
   }
 
@@ -5710,9 +5746,18 @@ client.on('interactionCreate', async interaction => {
   // CONFIRMAR VENTA CRIPTO
   if (interaction.isButton() && interaction.customId.startsWith('confirm_sell_crypto_')) {
     const amount = parseInt(interaction.customId.split('_')[3]);
+    const gameId = `crypto_sell_${interaction.user.id}_${amount}`;
+    
+    // PROTECCIÓN ANTI-SPAM: Usar gameId temporal para evitar doble venta
+    if (activeGames.has(gameId)) {
+      return interaction.reply({ content: '⏳ Espera... procesando tu venta anterior.', flags: 64 });
+    }
+    activeGames.set(gameId, { userId: interaction.user.id, processing: true });
+
     const userData = getUser(interaction.user.id);
 
     if (userData.crypto.easycoins < amount) {
+      activeGames.delete(gameId);
       return interaction.update({ 
         content: `❌ Ya no tienes suficientes EasyCoins. Tienes: **${userData.crypto.easycoins}** ₿`, 
         embeds: [],
@@ -5740,6 +5785,7 @@ client.on('interactionCreate', async interaction => {
       .setFooter({ text: '⚡ Precio cambia cada minuto | Rango: 5K-150K 🪙' })
       .setTimestamp();
 
+    activeGames.delete(gameId); // Eliminar lock
     await interaction.update({ embeds: [embed], components: [] });
   }
 
@@ -6244,6 +6290,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Esta raid está llena.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM: Evitar múltiples joins simultáneos
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera, alguien se está uniendo...', flags: 64 });
+    }
+    game.processing = true;
+
     game.players.push({ id: interaction.user.id, name: interaction.user.username, data: userData });
 
     const joinButton = new ActionRowBuilder().addComponents(
@@ -6260,6 +6312,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`${game.bossName}\n❤️ HP: ${game.bossHP}\n\n👥 **Jugadores:** ${game.players.length}/5\n\n**Raid:**\n${game.players.map(p => `• ${p.name} (Lv ${p.data.rpg.level})`).join('\n')}`)
       .setFooter({ text: `${interaction.user.username} se unió!` });
 
+    game.processing = false; // Desbloquear para el siguiente jugador
     await interaction.update({ embeds: [embed], components: [joinButton] });
 
     if (game.players.length >= 5) {
@@ -6428,6 +6481,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Este duelo ya está siendo procesado.', flags: 64 });
+    }
+    game.processing = true;
+
     if (action === 'decline') {
       activeGames.delete(gameId);
       await interaction.update({ content: '❌ Duelo rechazado.', embeds: [], components: [] });
@@ -6565,6 +6624,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== game.partner) {
       return interaction.reply({ content: '❌ Esta propuesta no es para ti.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Esta propuesta ya está siendo procesada.', flags: 64 });
+    }
+    game.processing = true;
 
     if (action === 'decline') {
       activeGames.delete(gameId);
@@ -6826,6 +6891,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== game.target) {
       return interaction.reply({ content: '❌ Esta invitación no es para ti.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Esta invitación ya está siendo procesada.', flags: 64 });
+    }
+    game.processing = true;
 
     if (action === 'decline') {
       activeGames.delete(gameId);
@@ -7478,6 +7549,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando.', flags: 64 });
+    }
+    game.processing = true;
+
     // Revelar el Flop (3 cartas comunitarias)
     const communityFlop = game.community.slice(0, 3);
     const communityStr = communityFlop.map(c => `${c.value}${c.suit}`).join(' ');
@@ -7503,6 +7580,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`**📋 The Flop**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${game.pot.toLocaleString()} 🪙`)
       .setFooter({ text: '¿Continuar al Turn?' });
 
+    game.processing = false; // Desbloquear
     await interaction.update({ embeds: [embed], components: [actionButtons] });
   }
 
@@ -7518,6 +7596,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== game.userId) {
       return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando.', flags: 64 });
+    }
+    game.processing = true;
 
     // Revelar el Turn (4ta carta)
     const communityTurn = game.community.slice(0, 4);
@@ -7544,6 +7628,7 @@ client.on('interactionCreate', async interaction => {
       .setDescription(`**📋 The Turn**\n\n**🌟 Comunitarias:**\n${communityStr}\n\n**🎴 Tu mano:**\n${playerCardsStr}\n\n**🤖 Bot:** 🎴 🎴 *(ocultas)*\n\n**💰 Pozo:** ${game.pot.toLocaleString()} 🪙`)
       .setFooter({ text: '¿Continuar al River?' });
 
+    game.processing = false; // Desbloquear
     await interaction.update({ embeds: [embed], components: [actionButtons] });
   }
 
@@ -7559,6 +7644,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== game.userId) {
       return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando.', flags: 64 });
+    }
+    game.processing = true;
 
     // Evaluar manos
     const evaluateHand = (cards, community) => {
@@ -7653,7 +7744,7 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.update({ embeds: [embed], components: [] });
-    activeGames.delete(gameId);
+    activeGames.delete(gameId); // El lock se elimina con el juego
   }
 
   // Botones de Poker - RAISE
@@ -7668,6 +7759,12 @@ client.on('interactionCreate', async interaction => {
     if (interaction.user.id !== game.userId) {
       return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
     }
+
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando.', flags: 64 });
+    }
+    game.processing = true;
 
     const userData = getUser(interaction.user.id);
     const raiseAmount = Math.floor(game.bet * 0.5);
@@ -7711,6 +7808,7 @@ client.on('interactionCreate', async interaction => {
       )
       .setFooter({ text: '¿Continuar al Turn?' });
 
+    game.processing = false; // Desbloquear
     await interaction.update({ embeds: [embed], components: [actionButtons] });
   }
 
@@ -7727,6 +7825,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Este juego no es tuyo.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando.', flags: 64 });
+    }
+    game.processing = true;
+
     const userData = getUser(interaction.user.id);
     userData.stats.gamesPlayed += 1;
     userData.stats.gamesLost += 1;
@@ -7741,7 +7845,7 @@ client.on('interactionCreate', async interaction => {
       .setTimestamp();
 
     await interaction.update({ embeds: [embed], components: [] });
-    activeGames.delete(gameId);
+    activeGames.delete(gameId); // El lock se elimina con el juego
   }
 
   // ========== GUÍA PARA USUARIOS ==========
