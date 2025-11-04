@@ -1776,6 +1776,98 @@ client.on('interactionCreate', async interaction => {
     await interaction.reply({ embeds: [embed] });
   }
 
+  // Comando: Reset Economy (Solo Admin) - Reinicia todas las monedas
+  if (interaction.isChatInputCommand() && interaction.commandName === 'reset-economy') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: '❌ Necesitas permisos de administrador para usar este comando.', flags: 64 });
+    }
+
+    const resetValue = interaction.options.getInteger('valor') || 0;
+
+    // Crear botones de confirmación
+    const confirmButton = new ButtonBuilder()
+      .setCustomId('confirm_reset_economy')
+      .setLabel('✅ Confirmar Reset')
+      .setStyle(ButtonStyle.Danger);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId('cancel_reset_economy')
+      .setLabel('❌ Cancelar')
+      .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder().addComponents(confirmButton, cancelButton);
+
+    const economy = loadEconomy();
+    const userCount = Object.keys(economy).length;
+
+    const embed = new EmbedBuilder()
+      .setColor('#e74c3c')
+      .setTitle('⚠️ CONFIRMACIÓN DE RESET ECONÓMICO')
+      .setDescription(`¿Estás seguro de que quieres resetear las monedas de **${userCount}** usuarios?\n\n**Valor de reset:** ${resetValue.toLocaleString()} 🪙\n\n⚠️ **Esta acción es IRREVERSIBLE**\nTodos los usuarios tendrán sus monedas establecidas en ${resetValue.toLocaleString()} 🪙`)
+      .setFooter({ text: 'Esta confirmación expira en 30 segundos' })
+      .setTimestamp();
+
+    const response = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+
+    // Collector para los botones
+    const collector = response.createMessageComponentCollector({ time: 30000 });
+
+    collector.on('collect', async i => {
+      if (i.user.id !== interaction.user.id) {
+        return i.reply({ content: '❌ Solo el administrador que ejecutó el comando puede confirmar.', flags: 64 });
+      }
+
+      if (i.customId === 'confirm_reset_economy') {
+        const economy = loadEconomy();
+        let resetCount = 0;
+
+        // Resetear coins de todos los usuarios
+        for (const userId in economy) {
+          economy[userId].coins = resetValue;
+          resetCount++;
+        }
+
+        saveEconomy(economy);
+
+        const successEmbed = new EmbedBuilder()
+          .setColor('#2ecc71')
+          .setTitle('✅ Reset Económico Completado')
+          .setDescription(`Se han reseteado las monedas de **${resetCount}** usuarios a **${resetValue.toLocaleString()}** 🪙`)
+          .addFields(
+            { name: '👤 Ejecutado por', value: interaction.user.username, inline: true },
+            { name: '📊 Usuarios afectados', value: resetCount.toString(), inline: true },
+            { name: '💰 Nuevo valor', value: `${resetValue.toLocaleString()} 🪙`, inline: true }
+          )
+          .setFooter({ text: '© Ea$y Esports | Sistema Económico' })
+          .setTimestamp();
+
+        await i.update({ embeds: [successEmbed], components: [] });
+        collector.stop();
+      } else if (i.customId === 'cancel_reset_economy') {
+        const cancelEmbed = new EmbedBuilder()
+          .setColor('#95a5a6')
+          .setTitle('❌ Reset Cancelado')
+          .setDescription('La operación de reset económico ha sido cancelada. No se realizaron cambios.')
+          .setTimestamp();
+
+        await i.update({ embeds: [cancelEmbed], components: [] });
+        collector.stop();
+      }
+    });
+
+    collector.on('end', collected => {
+      if (collected.size === 0) {
+        const timeoutEmbed = new EmbedBuilder()
+          .setColor('#95a5a6')
+          .setTitle('⏱️ Tiempo Agotado')
+          .setDescription('La confirmación de reset económico ha expirado. No se realizaron cambios.')
+          .setTimestamp();
+
+        interaction.editReply({ embeds: [timeoutEmbed], components: [] }).catch(() => {});
+      }
+    });
+  }
+
   // WORK - Trabajar para ganar monedas
   // ========== SISTEMA DE TRABAJO COMPLETO ==========
   if (interaction.isChatInputCommand() && interaction.commandName === 'work') {

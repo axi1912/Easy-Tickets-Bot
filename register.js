@@ -153,6 +153,19 @@ const commands = [
       }
     ]
   },
+  {
+    name: 'reset-economy',
+    description: '🔄 [ADMIN] Resetear las monedas de todos los usuarios',
+    options: [
+      {
+        name: 'valor',
+        description: 'Valor al que resetear las monedas (por defecto 0)',
+        type: 4,
+        required: false,
+        min_value: 0
+      }
+    ]
+  },
   // Juegos
   {
     name: 'blackjack',
