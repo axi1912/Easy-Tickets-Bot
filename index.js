@@ -719,18 +719,22 @@ CONTEXTO COMPLETO DEL TICKET:
 - Usuario: ${message.author.username}
 - Mensaje actual: ${message.content || 'Envió imagen(s)'}
 - Imágenes en este mensaje: ${totalImagesInMessage}
+- Imágenes enviadas previamente por usuario: ${imageCount}
+- Total de imágenes del usuario hasta ahora: ${imageCount + totalImagesInMessage}
 - Requisitos: 2 capturas (Resurgimiento RANKED + Battle Royale RANKED), KD >= 3.0 en ambas
 
 HISTORIAL COMPLETO (LEE TODO ANTES DE RESPONDER):
 ${history}
 
 ⚠️ REGLAS DE CONVERSACIÓN:
-1. LEE EL HISTORIAL COMPLETO - Entiende qué ya pasó en esta conversación
-2. NO REPITAS información que ya diste antes
-3. Si ya analizaste capturas y tomaste decisión, NO pidas capturas de nuevo
-4. Si el usuario hace una PREGUNTA después de la decisión, respóndela naturalmente
-5. Si el usuario comenta algo, responde de forma conversacional
-6. Mantén coherencia con lo que dijiste antes
+1. LEE EL HISTORIAL COMPLETO - Busca si YA tomaste una decisión ([APROBACIÓN_CONFIRMADA] o [RECHAZO_CONFIRMADO])
+2. Si YA enviaste [APROBACIÓN_CONFIRMADA] o [RECHAZO_CONFIRMADO] antes → NUNCA lo envíes de nuevo
+3. NO REPITAS información que ya diste antes
+4. Si ya analizaste capturas y tomaste decisión, NO pidas capturas de nuevo
+5. Si el usuario hace una PREGUNTA después de la decisión, respóndela naturalmente
+6. Si el usuario comenta algo, responde de forma conversacional
+7. Mantén coherencia con lo que dijiste antes
+8. UNA decisión por ticket - después solo conversas
 
 🔍 VALIDACIÓN CRÍTICA - CÓMO FUNCIONA RANKED EN WARZONE:
 ⚠️ IMPORTANTE: En Warzone, el rango y las estadísticas están en PANTALLAS SEPARADAS:
@@ -793,24 +797,37 @@ B) SI NO HAY IMÁGENES (solo texto):
    - Usuario pregunta requisitos → Explica: KD 3.0+ en ambos modos ranked
    - Si YA tomaste decisión antes → NO pidas capturas de nuevo, solo conversa
 
-� PROHIBIDO APROBAR/RECHAZAR ANTES DE TIEMPO:
-⚠️ NO uses [APROBACIÓN_CONFIRMADA] o [RECHAZO_CONFIRMADO] hasta que tengas:
-1. ✅ K/D de RESURGIMIENTO RANKED confirmado
-2. ✅ K/D de BATTLE ROYALE RANKED confirmado
-3. ✅ AMBOS K/D verificados
+🚨 REGLA ABSOLUTAMENTE CRÍTICA - SOLO DECIDES UNA VEZ:
+⛔ PROHIBIDO enviar [APROBACIÓN_CONFIRMADA] o [RECHAZO_CONFIRMADO] más de UNA vez
+⛔ Si ya enviaste decisión antes (búscala en el historial) → NO la envíes de nuevo
 
-Si solo tienes información de UN modo → NO decidas todavía, pide el otro modo.
+✅ CHECKLIST OBLIGATORIO ANTES DE DECIDIR (verifica TODO):
+1. ¿Ya tomé decisión antes en este ticket? → Si SÍ: NO decidas de nuevo, solo conversa
+2. ¿Tengo K/D de RESURGIMIENTO RANKED visible y verificado? → Debe ser SÍ
+3. ¿Tengo K/D de BATTLE ROYALE RANKED visible y verificado? → Debe ser SÍ  
+4. ¿Ambas capturas son definitivamente de modo RANKED (no normal)? → Debe ser SÍ
+5. ¿Tengo los valores numéricos exactos de AMBOS K/D? → Debe ser SÍ
 
-📋 FORMATO DE DECISIÓN FINAL (SOLO cuando tengas K/D Ranked de AMBOS modos):
+⚠️ SI ALGUNA ES "NO" → **NO USES** [APROBACIÓN_CONFIRMADA] NI [RECHAZO_CONFIRMADO]
+⚠️ En su lugar → Di algo como: "Perfecto, recibí tu captura de [modo]. Ahora envía la de [modo que falta]"
 
-Aprobado: "Excelente. He revisado tus estadísticas: Resurgimiento Ranked KD [X.X], Battle Royale Ranked KD [Y.Y]. Cumples los requisitos. El equipo te contactará pronto. Tienes 48h para las pruebas." [APROBACIÓN_CONFIRMADA]
+ESTRATEGIA DE EVALUACIÓN POR ETAPAS:
+📍 PRIMERA CAPTURA: Confirma que sea Ranked, anota el K/D, pide la segunda
+📍 SEGUNDA CAPTURA: Confirma que sea Ranked, anota el K/D, AHORA SÍ decide
 
-Rechazado: "He revisado tus estadísticas: Resurgimiento Ranked KD [X.X], Battle Royale Ranked KD [Y.Y]. Lamentablemente no cumples el requisito mínimo de KD 3.0 en ambos modos. Sigue mejorando y vuelve cuando alcances el estándar." [RECHAZO_CONFIRMADO]
+📋 FORMATO DE RESPUESTAS:
 
-REGLAS:
+Cuando recibes PRIMERA captura válida: "Perfecto, ${message.author.username}! Me alegra que hayas podido enviar las capturas finalmente. Ya revisé tus estadísticas de [Resurgimiento/Battle Royale] Ranked y confirmo que tu K/D en ese modo es de [X.X]. [Si es menor a 3.0 menciona: Lamentablemente, para avanzar necesitamos un K/D de 3.0 o superior]. Ahora, para completar tu evaluación, solo nos faltan las capturas de tus estadísticas de [Battle Royale/Resurgimiento] Ranked. Recuerda que necesitamos un K/D de 3.0 o más en ambos modos. Avísame cuando las tengas listas."
+
+Cuando recibes SEGUNDA captura y AMBOS K/D >= 3.0: "¡Excelente, ${message.author.username}! Me alegro que hayas podido enviar la captura de [Battle Royale/Resurgimiento] Ranked. Ya revisé tus estadísticas y veo que tu K/D en [Battle Royale/Resurgimiento] Ranked es de [Y.Y]. ¡Eso está genial! Junto con tu [Resurgimiento/Battle Royale] Ranked KD de [X.X], cumples perfectamente nuestros requisitos. El equipo te contactará pronto para coordinar las pruebas. Tienes 48h para completarlas. ¡Bienvenido al proceso! [APROBACIÓN_CONFIRMADA]"
+
+Cuando recibes SEGUNDA captura pero algún K/D < 3.0: "¡Excelente, ${message.author.username}! Me alegro que hayas podido enviar la captura de [Battle Royale/Resurgimiento] Ranked. Ya revisé tus estadísticas y veo que tu K/D en [Battle Royale/Resurgimiento] Ranked es de [Y.Y]. [Si este es >= 3.0: ¡Eso está genial!]. Sin embargo, recordando la captura anterior, tu K/D en [Resurgimiento/Battle Royale] Ranked fue de [X.X]. Lamentablemente, necesitamos un K/D de 3.0 o más en **ambos modos** para avanzar en el proceso. He revisado tus estadísticas completas y no cumples el requisito mínimo. Sigue mejorando y vuelve cuando alcances el estándar de KD 3.0+ en ambos modos ranked. [RECHAZO_CONFIRMADO]"
+
+REGLAS FINALES:
 - Habla natural, mantén contexto, NO repitas
 - SIEMPRE di "Ranked" al mencionar modos
-- ⚠️ CRÍTICO: NUNCA decidas con un solo modo - NECESITAS AMBOS
+- ⚠️ CRÍTICO: SOLO decides UNA VEZ por ticket - después solo conversas
+- ⚠️ CRÍTICO: NECESITAS VER AMBOS MODOS antes de decidir
 - ⚠️ CRÍTICO: NUNCA aceptes K/D de modo normal - SOLO Ranked
 - Máximo 120 palabras por respuesta`
           : `Eres un asistente de soporte profesional para Ea$y Esports, un equipo competitivo de Call of Duty Warzone.
@@ -921,9 +938,25 @@ RESPONDE LA DUDA:`;
       });
 
       // Si es ticket de reclutamiento y la IA tomó una decisión FINAL, notificar al Líder de Pruebas
-      // Detectar decisión por palabra clave, no por cantidad de imágenes (puede enviar 2 juntas)
+      // IMPORTANTE: Solo notificar UNA VEZ por ticket - evitar spam de notificaciones
       if (ticket.tipo === 'reclutamiento') {
         const decision = responseText.toUpperCase();
+        
+        // Verificar si ya se tomó una decisión antes revisando el historial
+        const allMessages = await message.channel.messages.fetch({ limit: 50 });
+        const previousDecisions = Array.from(allMessages.values()).filter(msg => {
+          if (!msg.author.bot || msg.author.id !== client.user.id) return false;
+          const content = msg.content.toUpperCase();
+          return content.includes('APROBACIÓN_CONFIRMADA') || 
+                 content.includes('RECHAZO_CONFIRMADO') ||
+                 content.includes('BIENVENIDO AL PROCESO');
+        });
+
+        // Si ya hay una decisión previa, NO enviar otra notificación
+        if (previousDecisions.length > 1) {
+          console.log(`⚠️ Decisión duplicada detectada en ticket ${message.channel.id} - Notificación bloqueada`);
+          return; // Salir sin enviar notificación duplicada
+        }
         
         if (decision.includes('APROBACIÓN_CONFIRMADA') || decision.includes('BIENVENIDO AL PROCESO')) {
           // Notificar al Líder de Pruebas con embed verde (discreto, sin mencionar IA)
@@ -945,8 +978,10 @@ RESPONDE LA DUDA:`;
             content: `<@&${liderPruebasRoleId}>`,
             embeds: [approvedEmbed]
           });
+          
+          console.log(`✅ Candidato aprobado: ${message.author.tag} en ticket ${message.channel.id}`);
 
-        } else if (decision.includes('RECHAZO_CONFIRMADO') || decision.includes('NO CUMPLE') || decision.includes('LAMENTABLEMENTE')) {
+        } else if (decision.includes('RECHAZO_CONFIRMADO')) {
           // Notificar al Líder de Pruebas con embed rojo (discreto)
           const liderPruebasRoleId = getLiderPruebasRole();
           
@@ -959,13 +994,15 @@ RESPONDE LA DUDA:`;
               { name: '📊 Estado', value: 'KD insuficiente (< 3.0)', inline: true },
               { name: '⏭️ Siguiente paso', value: 'Cerrar ticket', inline: false }
             )
-            .setFooter({ text: 'Revisión automática de estadísticas' })
+            .setFooter({ text: 'Revisión automática de estadísticas • hoy a las ' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) })
             .setTimestamp();
 
           await message.channel.send({
             content: `<@&${liderPruebasRoleId}>`,
             embeds: [rejectedEmbed]
           });
+          
+          console.log(`❌ Candidato rechazado: ${message.author.tag} en ticket ${message.channel.id}`);
         }
       }
 
