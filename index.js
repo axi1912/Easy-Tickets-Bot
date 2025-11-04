@@ -7452,6 +7452,9 @@ client.on('interactionCreate', async interaction => {
       userData.coins -= bet;
       updateUser(interaction.user.id, userData);
 
+      // Generar gameId único
+      const gameId = `poker_${interaction.user.id}_${Date.now()}`;
+
       // Crear baraja
       const suits = ['♠️', '♥️', '♣️', '♦️'];
       const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
