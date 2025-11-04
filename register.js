@@ -899,19 +899,6 @@ const commands = [
     ]
   },
   {
-    name: 'poker',
-    description: '🃏 Juega poker contra el bot',
-    options: [
-      {
-        name: 'apuesta',
-        description: 'Cantidad a apostar',
-        type: 4,
-        required: true,
-        min_value: 100
-      }
-    ]
-  },
-  {
     name: 'anuncio',
     description: '📢 [STAFF] Crear anuncio personalizado con embed'
   }
