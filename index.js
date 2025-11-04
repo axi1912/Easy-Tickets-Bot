@@ -164,6 +164,24 @@ function getLiderPruebasRole() {
   return process.env.ROL_LIDER_PRUEBAS || '1241211764100698203'; // Usar rol staff por defecto si no está configurado
 }
 
+// Verificar si un usuario tiene un juego activo
+function hasActiveGame(userId, gameType = null) {
+  for (let [gameId, game] of activeGames.entries()) {
+    if (game.userId === userId) {
+      // Si se especifica un tipo de juego, verificar que coincida
+      if (gameType) {
+        if (game.game === gameType || gameId.startsWith(gameType)) {
+          return { hasGame: true, gameId, gameType: game.game || gameType };
+        }
+      } else {
+        // Sin tipo específico, cualquier juego cuenta
+        return { hasGame: true, gameId, gameType: game.game || 'unknown' };
+      }
+    }
+  }
+  return { hasGame: false };
+}
+
 // Cargar/guardar tickets
 function loadTickets() {
   if (!fs.existsSync(TICKETS_FILE)) return {};
@@ -622,6 +640,32 @@ client.once('ready', async () => {
       console.error('Error en verificación de tickets inactivos:', error);
     }
   }, 1800000); // Cada 30 minutos
+
+  // Limpiar juegos abandonados/expirados cada 5 minutos
+  setInterval(() => {
+    try {
+      const now = Date.now();
+      const expiredGames = [];
+      
+      for (const [gameId, game] of activeGames.entries()) {
+        // Extraer timestamp del gameId
+        const parts = gameId.split('_');
+        const timestamp = parseInt(parts[parts.length - 1]);
+        
+        // Si el juego tiene más de 10 minutos, eliminarlo
+        if (!isNaN(timestamp) && now - timestamp > 600000) { // 10 minutos
+          expiredGames.push(gameId);
+        }
+      }
+      
+      if (expiredGames.length > 0) {
+        expiredGames.forEach(gameId => activeGames.delete(gameId));
+        console.log(`🧹 Limpieza automática: ${expiredGames.length} juego(s) expirado(s) eliminado(s)`);
+      }
+    } catch (error) {
+      console.error('Error en limpieza de juegos:', error);
+    }
+  }, 300000); // Cada 5 minutos
 });
 
 // Manejar mensajes para el juego de adivinar el número
@@ -2735,10 +2779,9 @@ client.on('interactionCreate', async interaction => {
     }
 
     // Verificar si el usuario ya tiene una partida activa
-    for (let [existingGameId, game] of activeGames.entries()) {
-      if (game.userId === interaction.user.id && game.game === 'blackjack') {
-        return interaction.reply({ content: '❌ Ya tienes una partida de Blackjack en curso. Termínala antes de empezar otra.', flags: 64 });
-      }
+    const activeCheck = hasActiveGame(interaction.user.id, 'blackjack');
+    if (activeCheck.hasGame) {
+      return interaction.reply({ content: '❌ Ya tienes una partida de Blackjack en curso. Termínala antes de empezar otra.', flags: 64 });
     }
 
     // Animación inicial
@@ -2797,7 +2840,8 @@ client.on('interactionCreate', async interaction => {
     const playerHand = [deck.pop(), deck.pop()];
     const dealerHand = [deck.pop(), deck.pop()];
 
-    const gameId = `${interaction.user.id}_${Date.now()}`;
+    // Generar gameId único con timestamp + random para evitar colisiones
+    const gameId = `bj_${interaction.user.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     activeGames.set(gameId, { deck, playerHand, dealerHand, bet, userId: interaction.user.id, game: 'blackjack' });
 
     const calculateHand = (hand) => {
@@ -2875,10 +2919,22 @@ client.on('interactionCreate', async interaction => {
     const parts = interaction.customId.split('_');
     const action = parts[1]; // 'hit' o 'stand'
     const gameId = parts.slice(2).join('_'); // resto es el gameId sin prefijo bj_
-    const game = activeGames.get(gameId);
+    
+    // Buscar el juego del usuario (más robusto)
+    let game = activeGames.get(gameId);
+    
+    // Si no se encuentra el juego exacto, buscar cualquier juego de blackjack del usuario
+    if (!game) {
+      for (const [key, g] of activeGames.entries()) {
+        if (g.userId === interaction.user.id && g.game === 'blackjack') {
+          game = g;
+          break;
+        }
+      }
+    }
 
     if (!game) {
-      return interaction.reply({ content: '❌ Este juego ya terminó.', flags: 64 });
+      return interaction.reply({ content: '❌ Este juego ya terminó o expiró.', flags: 64 });
     }
 
     if (game.userId !== interaction.user.id) {
@@ -2933,7 +2989,14 @@ client.on('interactionCreate', async interaction => {
         userData.stats.gamesLost++;
         userData.stats.totalLosses += game.bet;
         updateUser(interaction.user.id, userData);
-        activeGames.delete(gameId);
+        
+        // Eliminar el juego correctamente
+        for (const [key, g] of activeGames.entries()) {
+          if (g.userId === interaction.user.id && g.game === 'blackjack') {
+            activeGames.delete(key);
+            break;
+          }
+        }
 
         embed.setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙` });
         await interaction.update({ embeds: [embed], components: [] });
@@ -3081,7 +3144,14 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: `💰 Balance: ${userData.coins.toLocaleString()} 🪙` });
 
-      activeGames.delete(gameId);
+      // Eliminar el juego correctamente
+      for (const [key, g] of activeGames.entries()) {
+        if (g.userId === interaction.user.id && g.game === 'blackjack') {
+          activeGames.delete(key);
+          break;
+        }
+      }
+      
       await interaction.editReply({ embeds: [embed], components: [] });
     }
   }
@@ -3559,6 +3629,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, flags: 64 });
     }
 
+    // Verificar si el usuario ya tiene una partida activa de Guess
+    const activeCheck = hasActiveGame(interaction.user.id, 'guess');
+    if (activeCheck.hasGame) {
+      return interaction.reply({ content: '❌ Ya tienes una partida de adivinanza en curso. Termínala antes de empezar otra.', flags: 64 });
+    }
+
     const targetNumber = Math.floor(Math.random() * 100) + 1;
     const gameId = `guess_${interaction.user.id}_${Date.now()}`;
     
@@ -3595,6 +3671,12 @@ client.on('interactionCreate', async interaction => {
 
     if (userData.coins < bet) {
       return interaction.reply({ content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, flags: 64 });
+    }
+
+    // Verificar si el usuario ya tiene una partida activa de High/Low
+    const activeCheck = hasActiveGame(interaction.user.id);
+    if (activeCheck.hasGame && activeCheck.gameId.includes(interaction.user.id)) {
+      return interaction.reply({ content: '❌ Ya tienes una partida en curso. Termínala antes de empezar otra.', flags: 64 });
     }
 
     const currentNumber = Math.floor(Math.random() * 100) + 1;
@@ -4685,10 +4767,13 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    const gameId = `trivia_${interaction.user.id}_${Date.now()}`;
-    if (activeGames.has(gameId)) {
-      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    // Verificar si el usuario ya tiene una partida activa
+    const activeCheck = hasActiveGame(interaction.user.id, 'trivia');
+    if (activeCheck.hasGame) {
+      return interaction.reply({ content: '❌ Ya tienes una partida de Trivia en curso. Termínala antes de empezar otra.', flags: 64 });
     }
+
+    const gameId = `trivia_${interaction.user.id}_${Date.now()}`;
 
     activeGames.set(gameId, { userId: interaction.user.id, cost });
 
@@ -4771,6 +4856,12 @@ client.on('interactionCreate', async interaction => {
         content: `❌ No tienes suficientes monedas. Tienes: **${userData.coins.toLocaleString()}** 🪙`, 
         flags: 64 
       });
+    }
+
+    // Verificar si el usuario ya está en un juego de Bingo
+    const activeCheck = hasActiveGame(interaction.user.id, 'bingo');
+    if (activeCheck.hasGame) {
+      return interaction.reply({ content: '❌ Ya estás en una partida de Bingo. Espera a que termine.', flags: 64 });
     }
 
     const gameId = `bingo_${interaction.guild.id}_${Date.now()}`;
@@ -7228,9 +7319,10 @@ client.on('interactionCreate', async interaction => {
       });
     }
 
-    const gameId = `poker_${interaction.user.id}_${Date.now()}`;
-    if (activeGames.has(gameId)) {
-      return interaction.reply({ content: '❌ Ya tienes un juego activo.', flags: 64 });
+    // Verificar si el usuario ya tiene una partida activa
+    const activeCheck = hasActiveGame(interaction.user.id, 'poker');
+    if (activeCheck.hasGame) {
+      return interaction.reply({ content: '❌ Ya tienes una partida de Poker en curso. Termínala antes de empezar otra.', flags: 64 });
     }
 
     try {
