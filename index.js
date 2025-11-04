@@ -7448,12 +7448,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Ya tienes una partida de Poker en curso. Termínala antes de empezar otra.', flags: 64 });
     }
 
+    // Generar gameId único ANTES del try para que esté disponible en catch y setTimeout
+    const gameId = `poker_${interaction.user.id}_${Date.now()}`;
+
     try {
       userData.coins -= bet;
       updateUser(interaction.user.id, userData);
-
-      // Generar gameId único
-      const gameId = `poker_${interaction.user.id}_${Date.now()}`;
 
       // Crear baraja
       const suits = ['♠️', '♥️', '♣️', '♦️'];
