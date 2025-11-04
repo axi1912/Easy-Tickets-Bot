@@ -2797,27 +2797,34 @@ client.on('interactionCreate', async interaction => {
     try {
       await interaction.reply({ embeds: [loadingEmbed] });
 
-      // Animación de mezclar
+      // Animación SIMPLIFICADA para evitar problemas de concurrencia
+      // Solo 2 frames en lugar de 4 para reducir ediciones
       const shuffleFrames = [
         { text: '🎴 **MEZCLANDO**', color: '#2c3e50' },
-        { text: '🃏 **MEZCLANDO**', color: '#34495e' },
-        { text: '🎴 **REPARTIENDO**', color: '#2c3e50' },
         { text: '🃏 **REPARTIENDO**', color: '#34495e' }
       ];
 
       for (let i = 0; i < shuffleFrames.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 400)); // Mayor espera entre ediciones
         loadingEmbed.setColor(shuffleFrames[i].color);
         loadingEmbed.setDescription(`╔══════════════════════╗\n║                                          ║\n║       ${shuffleFrames[i].text}      ║\n║                                          ║\n╚══════════════════════╝`);
         try {
           await interaction.editReply({ embeds: [loadingEmbed] });
         } catch (err) {
           console.error('Error editReply during blackjack animation:', err);
+          // Si falla la animación, continuamos igual (no es crítico)
+          break; // Salir del loop de animación si falla
         }
       }
     } catch (err) {
       console.error('Blackjack initial error:', err);
-      return interaction.reply({ content: '❌ Error al iniciar el juego. Intenta de nuevo.', flags: 64 }).catch(() => {});
+      // Si falla el reply inicial, intentar responder con error
+      try {
+        await interaction.followUp({ content: '❌ Error al iniciar el juego. Intenta de nuevo.', flags: 64 });
+      } catch (e) {
+        console.error('No se pudo enviar mensaje de error:', e);
+      }
+      return;
     }
 
     // Crear baraja y repartir cartas
@@ -2914,24 +2921,40 @@ client.on('interactionCreate', async interaction => {
     try {
       await interaction.editReply({ embeds: [embed], components: [buttons] });
 
-      // Comprobar que el mensaje resultante tenga componentes; si no, enviar fallback
+      // CRÍTICO: Verificar que los botones estén presentes después de editar
+      await new Promise(resolve => setTimeout(resolve, 100)); // Pequeña pausa para que Discord procese
+      
       try {
         const replyMsg = await interaction.fetchReply();
         if (!replyMsg || !replyMsg.components || replyMsg.components.length === 0) {
-          console.log('⚠️ Fallback: Mensaje editado no contiene componentes, enviando followUp con botones');
-          await interaction.followUp({ embeds: [embed], components: [buttons] });
+          console.log('⚠️ FALLBACK ACTIVADO: Mensaje sin botones, enviando followUp');
+          await interaction.followUp({ 
+            content: '⚠️ Usa estos botones para jugar:', 
+            embeds: [embed], 
+            components: [buttons] 
+          });
         }
-      } catch (err) {
-        console.log('⚠️ No se pudo verificar reply o fetchReply falló, intentando followUp', err?.message || err);
-        try { await interaction.followUp({ embeds: [embed], components: [buttons] }); } catch (e) { console.error('Fallback followUp falló:', e); }
+      } catch (fetchErr) {
+        console.log('⚠️ fetchReply falló, enviando followUp preventivo:', fetchErr?.message);
+        await interaction.followUp({ 
+          content: '⚠️ Usa estos botones para jugar:', 
+          embeds: [embed], 
+          components: [buttons] 
+        });
       }
-    } catch (err) {
-      console.error('Error al editar reply con botones (Blackjack):', err);
+    } catch (editErr) {
+      console.error('❌ editReply FALLÓ completamente, usando followUp:', editErr);
+      // Si editReply falla completamente, enviar un mensaje nuevo
       try {
-        // Intentar enviar un nuevo mensaje con botones si la edición falla
-        await interaction.followUp({ embeds: [embed], components: [buttons] });
-      } catch (e) {
-        console.error('Error al enviar followUp con botones (Blackjack):', e);
+        await interaction.followUp({ 
+          content: '🎴 Tu juego de Blackjack:', 
+          embeds: [embed], 
+          components: [buttons] 
+        });
+      } catch (followUpErr) {
+        console.error('❌ CRÍTICO: followUp también falló:', followUpErr);
+        // Eliminar el juego si no se pueden enviar los botones
+        activeGames.delete(gameId);
       }
     }
   }
