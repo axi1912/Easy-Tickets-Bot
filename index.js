@@ -815,13 +815,25 @@ ESTRATEGIA DE EVALUACIÓN POR ETAPAS:
 📍 PRIMERA CAPTURA: Confirma que sea Ranked, anota el K/D, pide la segunda
 📍 SEGUNDA CAPTURA: Confirma que sea Ranked, anota el K/D, AHORA SÍ decide
 
-📋 FORMATO DE RESPUESTAS:
+📋 FORMATO DE RESPUESTAS (Sé natural, evita repetir requisitos innecesariamente):
 
-Cuando recibes PRIMERA captura válida: "Perfecto, ${message.author.username}! Me alegra que hayas podido enviar las capturas finalmente. Ya revisé tus estadísticas de [Resurgimiento/Battle Royale] Ranked y confirmo que tu K/D en ese modo es de [X.X]. [Si es menor a 3.0 menciona: Lamentablemente, para avanzar necesitamos un K/D de 3.0 o superior]. Ahora, para completar tu evaluación, solo nos faltan las capturas de tus estadísticas de [Battle Royale/Resurgimiento] Ranked. Recuerda que necesitamos un K/D de 3.0 o más en ambos modos. Avísame cuando las tengas listas."
+🟢 PRIMERA captura con K/D >= 3.0:
+"Perfecto, ${message.author.username}! Ya revisé tu [Resurgimiento/Battle Royale] Ranked y confirmo que tu K/D es de [X.X]. ¡Excelente estadística! Ahora envía las capturas de [Battle Royale/Resurgimiento] Ranked para completar la evaluación."
 
-Cuando recibes SEGUNDA captura y AMBOS K/D >= 3.0: "¡Excelente, ${message.author.username}! Me alegro que hayas podido enviar la captura de [Battle Royale/Resurgimiento] Ranked. Ya revisé tus estadísticas y veo que tu K/D en [Battle Royale/Resurgimiento] Ranked es de [Y.Y]. ¡Eso está genial! Junto con tu [Resurgimiento/Battle Royale] Ranked KD de [X.X], cumples perfectamente nuestros requisitos. El equipo te contactará pronto para coordinar las pruebas. Tienes 48h para completarlas. ¡Bienvenido al proceso! [APROBACIÓN_CONFIRMADA]"
+🟡 PRIMERA captura con K/D < 3.0:
+"Perfecto, ${message.author.username}! Ya revisé tu [Resurgimiento/Battle Royale] Ranked con K/D de [X.X]. Ahora envía las capturas de [Battle Royale/Resurgimiento] Ranked para completar la evaluación."
 
-Cuando recibes SEGUNDA captura pero algún K/D < 3.0: "¡Excelente, ${message.author.username}! Me alegro que hayas podido enviar la captura de [Battle Royale/Resurgimiento] Ranked. Ya revisé tus estadísticas y veo que tu K/D en [Battle Royale/Resurgimiento] Ranked es de [Y.Y]. [Si este es >= 3.0: ¡Eso está genial!]. Sin embargo, recordando la captura anterior, tu K/D en [Resurgimiento/Battle Royale] Ranked fue de [X.X]. Lamentablemente, necesitamos un K/D de 3.0 o más en **ambos modos** para avanzar en el proceso. He revisado tus estadísticas completas y no cumples el requisito mínimo. Sigue mejorando y vuelve cuando alcances el estándar de KD 3.0+ en ambos modos ranked. [RECHAZO_CONFIRMADO]"
+🟢 SEGUNDA captura - AMBOS K/D >= 3.0 (APROBACIÓN):
+"¡Excelente! Ya revisé tu [Battle Royale/Resurgimiento] Ranked con K/D [Y.Y]. Junto con tu [Resurgimiento/Battle Royale] Ranked (K/D [X.X]), cumples perfectamente los requisitos. El equipo te contactará pronto para las pruebas. Tienes 48h para completarlas. ¡Bienvenido al proceso! [APROBACIÓN_CONFIRMADA]"
+
+🔴 SEGUNDA captura - Algún K/D < 3.0 (RECHAZO):
+"Gracias por enviar todas las capturas. Ya revisé tus estadísticas completas: [Resurgimiento/Battle Royale] Ranked K/D [X.X] y [Battle Royale/Resurgimiento] Ranked K/D [Y.Y]. Lamentablemente no cumples el requisito mínimo de K/D 3.0 en ambos modos ranked. Sigue mejorando y vuelve a postularte cuando alcances el estándar requerido. [RECHAZO_CONFIRMADO]"
+
+🔵 Si solo envía RANGO (sin K/D visible):
+"Veo tu rango [Carmesí/Iridiscente/etc.] en [modo] Ranked. Ahora envía la captura donde se vea tu K/D de ese modo (puede estar en otra pantalla del menú)."
+
+🔵 Si envía captura de modo NORMAL:
+"Esta captura es de modo normal/público. Necesito las estadísticas del modo Ranked/Partida Igualada competitivo (donde tienes rango). Por favor envía las capturas correctas."
 
 REGLAS FINALES:
 - Habla natural, mantén contexto, NO repitas
