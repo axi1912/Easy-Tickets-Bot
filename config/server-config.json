@@ -1,0 +1,16 @@
+{
+  "description": "Configuración por servidor - se genera automáticamente con comandos de config",
+  "example": {
+    "guildId": {
+      "logChannel": "channelId",
+      "roles": {
+        "staff": "roleId",
+        "admin": "roleId",
+        "moderator": "roleId"
+      },
+      "ticketCategories": {},
+      "welcomeChannel": "channelId",
+      "leaveChannel": "channelId"
+    }
+  }
+}
