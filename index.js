@@ -2911,7 +2911,29 @@ client.on('interactionCreate', async interaction => {
       return interaction.editReply({ embeds: [embed] });
     }
 
-    await interaction.editReply({ embeds: [embed], components: [buttons] });
+    try {
+      await interaction.editReply({ embeds: [embed], components: [buttons] });
+
+      // Comprobar que el mensaje resultante tenga componentes; si no, enviar fallback
+      try {
+        const replyMsg = await interaction.fetchReply();
+        if (!replyMsg || !replyMsg.components || replyMsg.components.length === 0) {
+          console.log('⚠️ Fallback: Mensaje editado no contiene componentes, enviando followUp con botones');
+          await interaction.followUp({ embeds: [embed], components: [buttons] });
+        }
+      } catch (err) {
+        console.log('⚠️ No se pudo verificar reply o fetchReply falló, intentando followUp', err?.message || err);
+        try { await interaction.followUp({ embeds: [embed], components: [buttons] }); } catch (e) { console.error('Fallback followUp falló:', e); }
+      }
+    } catch (err) {
+      console.error('Error al editar reply con botones (Blackjack):', err);
+      try {
+        // Intentar enviar un nuevo mensaje con botones si la edición falla
+        await interaction.followUp({ embeds: [embed], components: [buttons] });
+      } catch (e) {
+        console.error('Error al enviar followUp con botones (Blackjack):', e);
+      }
+    }
   }
 
   // Botones de Blackjack
