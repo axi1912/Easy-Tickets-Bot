@@ -14,9 +14,9 @@
 - ✅ `index-modular.js` - Punto de entrada modular funcional
 - ✅ `test-modular.js` - Script de prueba
 
-### Comandos Modulares (8/~60 comandos)
+### Comandos Modulares (16/~60 comandos - 27%)
 
-#### Economía (7 comandos)
+#### Economía (7 comandos) ✅
 - ✅ `/balance` - Ver balance y estadísticas
 - ✅ `/daily` - Recompensa diaria
 - ✅ `/leaderboard` - Top 10 más ricos
@@ -25,8 +25,20 @@
 - ✅ `/bank` - Sistema bancario (depositar/retirar/ver balance)
 - ✅ `/loan` - Sistema de préstamos (solicitar/pagar/ver estado)
 
-#### Juegos (1 comando)
+#### Juegos (4 comandos) ⭐
 - ✅ `/coinflip` - Cara o cruz
+- ✅ `/dice` - Tira los dados
+- ✅ `/roulette` - Ruleta de la fortuna
+- ✅ `/slots` - Máquina tragamonedas
+
+#### Tienda (3 comandos) ✅
+- ✅ `/shop` - Ver tienda de items
+- ✅ `/buy` - Comprar items especiales
+- ✅ `/inventory` - Ver inventario y títulos
+
+#### Administración (2 comandos) ✅
+- ✅ `/add-coins` - Agregar monedas (admin)
+- ✅ `/remove-coins` - Remover monedas (admin)
 
 ## ⏳ Pendiente
 
@@ -88,20 +100,26 @@
 
 ## 🔧 Trabajo Restante
 
+### ✅ Completado Recientemente
+1. ✅ **Scripts de registro de comandos** - `deploy-commands.js` y `deploy-commands-guild.js`
+2. ✅ **Comandos de juegos principales** - dice, roulette, slots
+3. ✅ **Comandos de tienda** - shop, buy, inventory
+4. ✅ **Comandos admin básicos** - add-coins, remove-coins
+
 ### Prioridad Alta
-1. **Handlers de botones y menús** - Necesarios para que `/work` funcione completamente
-2. **Comandos de juegos principales** - blackjack, dice, slots (los más usados)
+1. **Handlers de botones y menús** - Necesarios para que `/work`, `/blackjack` funcionen completamente
+2. **Comando /blackjack completo** - El juego más popular
 3. **Sistema de tickets modular** - Migrar completamente a handlers/
 
 ### Prioridad Media
-4. **Comandos de tienda** - shop, buy, inventory
-5. **Comandos sociales** - clan, marry, profile
-6. **Comandos admin** - add-coins, remove-coins, panels
+4. **Comandos sociales** - clan, marry, profile (~7 comandos)
+5. **Comandos admin avanzados** - reset-economy, panels, respuesta (~5 comandos)
+6. **Comandos auxiliares** - daily-quest, spin, rob, crime (~10 comandos)
 
 ### Prioridad Baja
-7. **Comandos auxiliares** - daily-quest, spin, etc.
-8. **Registro de comandos en Discord** - Script para subir slash commands
-9. **Documentación completa** - JSDoc para todas las funciones
+7. **Documentación JSDoc** - Para todas las funciones
+8. **Testing exhaustivo** - Cada comando en ambiente real
+9. **Optimizaciones** - Cache, rate limiting avanzado
 
 ## 📝 Notas Técnicas
 
@@ -177,6 +195,7 @@ Easy-Tickets-Bot/
 
 ---
 
-**Estado:** Sistema base funcional al 100% ✅  
-**Progreso de comandos:** 8/60 (13%) 📊  
-**Última actualización:** 2025-01-04
+**Estado:** Sistema modular funcional al 100% ✅  
+**Progreso de comandos:** 16/60 (27%) 📊  
+**Scripts de deploy:** ✅ Creados y listos  
+**Última actualización:** 2025-11-04
