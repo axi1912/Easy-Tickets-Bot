@@ -1,11 +1,9 @@
 {
   "name": "easy-tickets-simple",
-  "version": "2.0.0",
-  "main": "index-modular.js",
+  "version": "1.0.0",
+  "main": "index.js",
   "scripts": {
-    "start": "node start-production.js",
-    "dev": "node index-modular.js",
-    "deploy": "node deploy-commands.js",
+    "start": "node index.js",
     "register": "node register.js"
   },
   "dependencies": {
