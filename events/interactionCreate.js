@@ -190,6 +190,111 @@ module.exports = {
           return interaction.update({ embeds: [embed], components: [] });
         }
       }
+
+      // Duel buttons
+      if (customId.startsWith('duel_')) {
+        const action = customId.split('_')[1];
+        const challengerId = customId.split('_')[2];
+        const opponentId = customId.split('_')[3];
+        
+        if (action === 'accept') {
+          const bet = parseInt(customId.split('_')[4]);
+          
+          if (interaction.user.id !== opponentId) {
+            return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
+          }
+
+          const { getUser, updateUser } = require('../utils/economy');
+          const challengerData = getUser(challengerId);
+          const opponentData = getUser(opponentId);
+
+          // Verificar que ambos tengan suficiente dinero
+          if (challengerData.coins < bet) {
+            return interaction.update({ 
+              content: '❌ El retador ya no tiene suficientes monedas para este duelo.', 
+              embeds: [], 
+              components: [] 
+            });
+          }
+
+          if (opponentData.coins < bet) {
+            return interaction.reply({ 
+              content: '❌ No tienes suficientes monedas para este duelo.', 
+              flags: 64 
+            });
+          }
+
+          // Simular duelo (50/50 con pequeño factor aleatorio)
+          const challengerPower = Math.random() * 100 + (challengerData.workLevel || 1) * 2;
+          const opponentPower = Math.random() * 100 + (opponentData.workLevel || 1) * 2;
+          
+          const winner = challengerPower > opponentPower ? challengerId : opponentId;
+          const loser = winner === challengerId ? opponentId : challengerId;
+          
+          const winnerData = getUser(winner);
+          const loserData = getUser(loser);
+
+          winnerData.coins += bet;
+          loserData.coins -= bet;
+
+          if (!winnerData.stats) winnerData.stats = {};
+          winnerData.stats.gamesPlayed = (winnerData.stats.gamesPlayed || 0) + 1;
+          winnerData.stats.gamesWon = (winnerData.stats.gamesWon || 0) + 1;
+          winnerData.stats.totalWinnings = (winnerData.stats.totalWinnings || 0) + bet;
+
+          if (!loserData.stats) loserData.stats = {};
+          loserData.stats.gamesPlayed = (loserData.stats.gamesPlayed || 0) + 1;
+          loserData.stats.totalLosses = (loserData.stats.totalLosses || 0) + bet;
+
+          updateUser(winner, winnerData);
+          updateUser(loser, loserData);
+
+          const winnerUser = await interaction.client.users.fetch(winner);
+          const loserUser = await interaction.client.users.fetch(loser);
+
+          const embed = new EmbedBuilder()
+            .setColor('#f39c12')
+            .setTitle('⚔️ Resultado del Duelo')
+            .setDescription(
+              `🏆 **Ganador:** ${winnerUser}\n` +
+              `💀 **Perdedor:** ${loserUser}\n\n` +
+              `💰 **Premio:** ${bet.toLocaleString()} 🪙`
+            )
+            .addFields(
+              { name: `${winnerUser.username}`, value: `Poder: ${Math.floor(winner === challengerId ? challengerPower : opponentPower)}`, inline: true },
+              { name: `${loserUser.username}`, value: `Poder: ${Math.floor(loser === challengerId ? challengerPower : opponentPower)}`, inline: true }
+            )
+            .setFooter({ text: '¡Buen duelo!' });
+
+          await interaction.update({ content: null, embeds: [embed], components: [] });
+
+          // Limpiar propuesta si existe
+          if (client.duelProposals) {
+            const duelKey = `${challengerId}_${opponentId}`;
+            client.duelProposals.delete(duelKey);
+          }
+        }
+
+        if (action === 'decline') {
+          if (interaction.user.id !== opponentId) {
+            return interaction.reply({ content: '❌ Este duelo no es para ti.', flags: 64 });
+          }
+
+          const challenger = await interaction.client.users.fetch(challengerId);
+
+          const embed = new EmbedBuilder()
+            .setColor('#95a5a6')
+            .setTitle('❌ Duelo Rechazado')
+            .setDescription(`${interaction.user} ha rechazado el duelo de ${challenger}.`);
+
+          await interaction.update({ content: null, embeds: [embed], components: [] });
+
+          if (client.duelProposals) {
+            const duelKey = `${challengerId}_${opponentId}`;
+            client.duelProposals.delete(duelKey);
+          }
+        }
+      }
     }
 
     // ========== STRING SELECT MENUS ==========

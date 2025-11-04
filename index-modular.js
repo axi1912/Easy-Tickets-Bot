@@ -28,6 +28,11 @@ client.commandHandler.initializeCommands();
 // Map global para juegos activos (compartido con comandos)
 client.activeGames = new Map();
 
+// Maps para propuestas sociales
+client.marriageProposals = new Map();
+client.tradeProposals = new Map();
+client.duelProposals = new Map();
+
 // ========== CARGAR EVENTOS ==========
 const eventsPath = path.join(__dirname, 'events');
 if (fs.existsSync(eventsPath)) {
