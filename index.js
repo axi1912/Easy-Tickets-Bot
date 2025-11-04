@@ -2963,6 +2963,12 @@ client.on('interactionCreate', async interaction => {
       return interaction.reply({ content: '❌ Este no es tu juego.', flags: 64 });
     }
 
+    // PROTECCIÓN ANTI-SPAM: Evitar múltiples clics simultáneos
+    if (game.processing) {
+      return interaction.reply({ content: '⏳ Espera... procesando tu jugada anterior.', flags: 64 });
+    }
+    game.processing = true; // Bloquear el juego mientras se procesa
+
     const calculateHand = (hand) => {
       let sum = 0;
       let aces = 0;
@@ -3012,7 +3018,7 @@ client.on('interactionCreate', async interaction => {
         userData.stats.totalLosses += game.bet;
         updateUser(interaction.user.id, userData);
         
-        // Eliminar el juego correctamente
+        // Eliminar el juego correctamente (el lock se borra con el juego)
         for (const [key, g] of activeGames.entries()) {
           if (g.userId === interaction.user.id && g.game === 'blackjack') {
             activeGames.delete(key);
@@ -3061,6 +3067,7 @@ client.on('interactionCreate', async interaction => {
             .setStyle(ButtonStyle.Danger)
         );
 
+        game.processing = false; // Desbloquear para el siguiente clic
         await interaction.update({ embeds: [embed], components: [buttons] });
       }
     } else if (action === 'stand') {
@@ -3166,7 +3173,7 @@ client.on('interactionCreate', async interaction => {
         )
         .setFooter({ text: `💰 Balance: ${userData.coins.toLocaleString()} 🪙` });
 
-      // Eliminar el juego correctamente
+      // Eliminar el juego correctamente (el lock se borra con el juego)
       for (const [key, g] of activeGames.entries()) {
         if (g.userId === interaction.user.id && g.game === 'blackjack') {
           activeGames.delete(key);
