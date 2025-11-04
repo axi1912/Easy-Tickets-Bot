@@ -295,6 +295,132 @@ module.exports = {
           }
         }
       }
+
+      // ==========================================
+      // HANDLER: HIGHLOW BUTTONS (hl_higher, hl_lower, hl_cashout)
+      // ==========================================
+      if (interaction.customId.startsWith('hl_')) {
+        const parts = interaction.customId.split('_');
+        const action = parts[1];
+        const gameId = parts.slice(2).join('_');
+        const game = client.activeGames ? client.activeGames.get(gameId) : null;
+
+        if (!game) {
+          return interaction.reply({ content: '❌ Este juego ya terminó.', flags: 64 });
+        }
+
+        if (game.userId !== interaction.user.id) {
+          return interaction.reply({ content: '❌ Este no es tu juego.', flags: 64 });
+        }
+
+        if (game.processing) {
+          return interaction.reply({ content: '⏳ Espera... procesando tu jugada anterior.', flags: 64 });
+        }
+        game.processing = true;
+
+        const { getUser, updateUser } = require('../utils/economy');
+        const { addBattlePassXP } = require('../utils/helpers');
+        const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+        if (action === 'cashout') {
+          const multipliers = [0, 2, 3, 5, 7, 10];
+          const multiplier = multipliers[Math.min(game.streak, 5)];
+          const winnings = game.bet * multiplier;
+          const bpXPRewards = [0, 20, 35, 50, 70, 100];
+          const bpXP = bpXPRewards[Math.min(game.streak, 5)];
+
+          const userData = getUser(interaction.user.id);
+          userData.coins += winnings - game.bet;
+          const xpResult = addBattlePassXP(userData, bpXP);
+          userData.stats.gamesPlayed++;
+          userData.stats.gamesWon++;
+          userData.stats.totalWinnings += winnings - game.bet;
+          updateUser(interaction.user.id, userData);
+
+          const streakMedals = ['', '✨', '⭐', '🌟', '💫', '💎'];
+          const medal = streakMedals[Math.min(game.streak, 5)];
+
+          const embed = new EmbedBuilder()
+            .setColor('#2ecc71')
+            .setTitle('📊 Higher or Lower - ¡COBRADO!')
+            .setDescription(`╔═══════════════════════╗\n║                                              ║\n║  ${medal} **¡PREMIO COBRADO!** ${medal}  ║\n║                                              ║\n║  💰 **+${(winnings - game.bet).toLocaleString()} 🪙**  ║\n║  ⭐ **+${xpResult.finalXP} XP${xpResult.hasBoost ? ' 🔥' : ''}**  ║\n║                                              ║\n╚═══════════════════════╝`)
+            .addFields(
+              { name: '🔥 Racha final', value: `**${game.streak}** ${medal}`, inline: true },
+              { name: '💎 Multiplicador', value: `**${multiplier}x**`, inline: true },
+              { name: '🏆 Ganancia', value: `**${(winnings - game.bet).toLocaleString()}** 🪙`, inline: true }
+            )
+            .setFooter({ text: `💰 Nuevo balance: ${userData.coins.toLocaleString()} 🪙 | ¡Excelente decisión!` });
+
+          client.activeGames.delete(gameId);
+          await interaction.update({ embeds: [embed], components: [] });
+        } else {
+          const nextNumber = Math.floor(Math.random() * 100) + 1;
+          const correct = (action === 'higher' && nextNumber > game.currentNumber) ||
+                         (action === 'lower' && nextNumber < game.currentNumber);
+
+          if (correct) {
+            game.streak++;
+            game.currentNumber = nextNumber;
+
+            const multipliers = [0, 2, 3, 5, 7, 10];
+            const multiplier = multipliers[Math.min(game.streak, 5)];
+
+            const streakEmojis = ['', '✨', '⭐', '🌟', '💫', '💎'];
+            const streakText = game.streak >= 5 ? '💎 **¡RACHA ÉPICA!** 💎' : game.streak >= 3 ? '🌟 **¡GRAN RACHA!** 🌟' : '✨ **¡Correcto!** ✨';
+
+            const embed = new EmbedBuilder()
+              .setColor(game.streak >= 5 ? '#f1c40f' : game.streak >= 3 ? '#9b59b6' : '#3498db')
+              .setTitle('📊 Higher or Lower - ¡Acertaste!')
+              .setDescription(`╔══════════════════════╗\n║                                          ║\n║   ${streakText}   ║\n║                                          ║\n║      🎲 Nuevo número:      ║\n║         **${nextNumber}**         ║\n║                                          ║\n╚══════════════════════╝\n\n❓ **¿Seguir jugando o cobrar?**`)
+              .addFields(
+                { name: '💰 Apuesta', value: `**${game.bet.toLocaleString()}** 🪙`, inline: true },
+                { name: '🔥 Racha', value: `**${game.streak}** ${streakEmojis[Math.min(game.streak, 5)]}`, inline: true },
+                { name: '💎 Multiplicador', value: `**${multiplier}x**`, inline: true }
+              )
+              .setFooter({ text: `💡 Ganancia actual: ${((game.bet * multiplier) - game.bet).toLocaleString()} 🪙` });
+
+            const buttons = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`hl_higher_${gameId}`)
+                .setLabel('⬆️ Mayor')
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId(`hl_lower_${gameId}`)
+                .setLabel('⬇️ Menor')
+                .setStyle(ButtonStyle.Danger),
+              new ButtonBuilder()
+                .setCustomId(`hl_cashout_${gameId}`)
+                .setLabel('💰 Cobrar')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(game.streak === 0)
+            );
+
+            game.processing = false;
+            await interaction.update({ embeds: [embed], components: [buttons] });
+          } else {
+            const userData = getUser(interaction.user.id);
+            userData.coins -= game.bet;
+            userData.stats.gamesPlayed++;
+            userData.stats.gamesLost++;
+            userData.stats.totalLosses += game.bet;
+            updateUser(interaction.user.id, userData);
+
+            const embed = new EmbedBuilder()
+              .setColor('#e74c3c')
+              .setTitle('📊 Higher or Lower - ¡Fallaste!')
+              .setDescription(`╔═══════════════════╗\n║                                      ║\n║   💔 **INCORRECTO** 💔   ║\n║                                      ║\n║  El número era **${nextNumber}**  ║\n║   **-${game.bet.toLocaleString()} 🪙**   ║\n║                                      ║\n╚═══════════════════╝`)
+              .addFields(
+                { name: '🔥 Racha alcanzada', value: game.streak > 0 ? `**${game.streak}** 🎯` : 'Ninguna 😢', inline: true },
+                { name: '💰 Balance', value: `**${userData.coins.toLocaleString()}** 🪙`, inline: true }
+              )
+              .setFooter({ text: '¡No te rindas! Intenta de nuevo' });
+
+            client.activeGames.delete(gameId);
+            await interaction.update({ embeds: [embed], components: [] });
+          }
+        }
+        return;
+      }
     }
 
     // ========== STRING SELECT MENUS ==========
