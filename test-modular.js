@@ -3,15 +3,18 @@
 // Prueba el sistema modular sin afectar Railway
 // ==========================================
 
-const { initializeCommands, getAllCommands } = require('./handlers/commandHandler');
+const CommandHandler = require('./handlers/commandHandler');
 
 console.log('🧪 PROBANDO SISTEMA MODULAR...\n');
 
+// Crear instancia del CommandHandler
+const handler = new CommandHandler();
+
 // Inicializar comandos
-initializeCommands();
+handler.initializeCommands();
 
 // Verificar comandos cargados
-const commands = getAllCommands();
+const commands = handler.getAllCommands();
 
 console.log('\n📋 RESUMEN:');
 console.log(`Total de comandos: ${commands.size}`);
