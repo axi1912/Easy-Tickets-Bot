@@ -520,6 +520,12 @@ function addBattlePassXP(userData, xp) {
 client.once('ready', async () => {
   console.log(`✅ Bot listo: ${client.user.tag}`);
   
+  // Establecer estado del bot
+  client.user.setPresence({
+    activities: [{ name: 'Gestionando Ea$y Esports', type: 0 }],
+    status: 'online'
+  });
+  
   // Cargar datos persistentes (juegos activos, cooldowns, etc.)
   console.log('📂 Cargando datos persistentes...');
   loadPersistent();
