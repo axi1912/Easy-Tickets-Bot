@@ -522,7 +522,7 @@ client.once('ready', async () => {
   
   // Establecer estado del bot
   client.user.setPresence({
-    activities: [{ name: 'Gestionando Ea$y Esports', type: 0 }],
+    activities: [{ name: 'Gestionando Ea$y Esports......', type: 0 }],
     status: 'online'
   });
   
